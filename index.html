@@ -179,6 +179,10 @@ svg text.halo{paint-order:stroke;stroke:var(--land);stroke-width:3px;stroke-line
           </div>
         </div>
         <div class="field">
+          <label for="who">Your name (optional, shown with your readings)</label>
+          <input type="text" id="who" maxlength="40" autocomplete="name">
+        </div>
+        <div class="field">
           <label for="when">Date and time of sample</label>
           <input type="datetime-local" id="when">
         </div>
@@ -241,6 +245,8 @@ svg text.halo{paint-order:stroke;stroke:var(--land);stroke-width:3px;stroke-line
   </aside>
 </main>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 // Tywi Tracer model: river network, hydrology, and source-location inverse model.
 const TywiModel = (() => {
@@ -737,7 +743,7 @@ function doRecompute() {
 
 function renderSources() {
   const out = $('sourcesOut'), res = state.res;
-  if (!state.readings.length) { out.innerHTML = '<p class="small">No readings yet. Log the first one from the "Log a reading" tab.</p>'; return; }
+  if (!state.readings.length) { out.innerHTML = '<p class="small">No readings yet. Log the first one from the "Log reading" tab, or load the demo readings to see how the tracer works.</p>' + demoButton(); wireDemo(); return; }
   const n = res.readings.length;
   let h = `<p class="small">${n} reading${n === 1 ? '' : 's'} in the ${res.windowDays} days up to ${fmtDay(res.asOf)}. Background taken as ${res.bg.n.toFixed(1)} mg/L nitrate and ${res.bg.p.toFixed(3)} mg/L phosphate.</p>`;
   if (!res.sources.length) {
@@ -857,7 +863,7 @@ $('useLoc').onclick = () => {
 $('save').onclick = async () => {
   const msg = $('saveMsg');
   const say = (t, cls) => { msg.innerHTML = `<div class="msg ${cls || ''}">${esc(t)}</div>`; };
-  if (!state.db) return say('Readings can only be saved when this page is opened in Claude and you are signed in.', 'err');
+  if (!state.db) return say('The reading store isn\'t connected. Check your internet connection and reload the page.', 'err');
   if (state.canWrite === false) return say('You can view readings but not add them. Ask the page owner to give you Contributor access.', 'err');
   if (!state.pending) return say('Choose where the sample was taken first.', 'err');
   const nit = $('nit').value === '' ? NaN : parseFloat($('nit').value);
@@ -868,6 +874,7 @@ $('save').onclick = async () => {
   if (isNaN(when)) return say('Enter the date and time of the sample.', 'err');
   if (when.getTime() > Date.now() + 36e5) return say('The sample time is in the future. Check the date.', 'err');
   const doc = { lat: +state.pending.rawLat.toFixed(5), lng: +state.pending.rawLng.toFixed(5), takenAt: when.toISOString(), createdAt: new Date().toISOString(), demo: false, by: state.me || 'unknown' };
+  const who = $('who').value.trim(); if (who) { doc.name = who.slice(0, 40); try { localStorage.setItem('tywi-name', doc.name); } catch (e) {} }
   if (isFinite(nit)) doc.nitrate = nit;
   if (isFinite(pho)) doc.phosphate = pho;
   const note = $('note').value.trim(); if (note) doc.note = note.slice(0, 300);
@@ -878,8 +885,8 @@ $('save').onclick = async () => {
     $('nit').value = ''; $('pho').value = ''; $('note').value = ''; $('when').value = localNow();
     state.pending = null; $('locOut').className = 'msg'; $('locOut').textContent = 'No location yet.';
   } catch (e) {
-    if (e && e.code === 'invalid_argument') { state.canWrite = false; say('You don\'t have permission to add readings. Ask the page owner for Contributor access.', 'err'); }
-    else if (e && e.code === 'quota_exceeded') say('The reading store is full. Remove old demo readings to make space.', 'err');
+    if (e && e.code === 'permission-denied') say('The database refused this reading. Its security rules may have expired: the page owner needs to update them in Firebase.', 'err');
+    else if (e && e.code === 'resource-exhausted') say('The free daily limit has been reached. Try again tomorrow.', 'err');
     else say('The reading didn\'t save. Check your connection and try again.', 'err');
   } finally { $('save').disabled = false; }
 };
@@ -892,17 +899,17 @@ function selectReading(id) {
 function renderList() {
   const ul = $('rlist'), res = state.res;
   const demoCount = state.readings.filter(r => r.demo).length;
-  $('demoBar').innerHTML = demoCount ? `<div class="msg">${demoCount} demo readings are showing. They're simulated (two hidden pollution sources) so you can see how the tracer works.${state.canEdit ? ' <div style="margin-top:6px"><button class="btn ghost" id="clearDemo" type="button">Remove demo readings</button></div>' : ''}</div>` : '';
+  $('demoBar').innerHTML = demoCount ? `<div class="msg">${demoCount} demo readings are showing. They're simulated (two hidden pollution sources) so you can see how the tracer works. <div style="margin-top:6px"><button class="btn ghost" id="clearDemo" type="button">Remove demo readings</button></div></div>` : '';
   const cd = $('clearDemo');
   if (cd) cd.onclick = async () => {
     if (!confirm('Remove all demo readings? Real readings stay.')) return;
     cd.disabled = true;
     for (const r of state.readings.filter(r => r.demo)) { try { await state.db.doc('readings/' + r.id).delete(); } catch (e) { break; } }
   };
-  if (!res || !res.allPrepared.length) { ul.innerHTML = '<li class="small">No readings yet.</li>'; return; }
+  if (!res || !res.allPrepared.length) { ul.innerHTML = '<li class="small">No readings yet.</li>' + demoButton(); wireDemo(); return; }
   const list = [...res.allPrepared].sort((a, b) => b.t - a.t);
   ul.innerHTML = list.map(r => {
-    const who = r.demo ? 'Demo data' : (state.names[r.by] || 'Someone');
+    const who = r.demo ? 'Demo data' : (r.name || 'Someone');
     const canDel = state.db && !r.demo && (r.by === state.me || state.canEdit);
     return `<li data-id="${esc(r.id)}" class="${state.sel === r.id ? 'sel' : ''}">
       <span><span class="chip" style="background:${zColor(zScore(r, res.bg))}"></span><strong>${esc(RNAME[r.river])} ${r.chain.toFixed(1)} km</strong> · ${esc(fmtDate(r.takenAt))}</span>
@@ -946,14 +953,14 @@ function renderCond() {
     <dt>Rain index (API)</dt><dd>${api.toFixed(1)} mm${missing ? ` · ${missing} day${missing > 1 ? 's' : ''} missing, counted as dry` : ''}</dd>
     <dt>Flow at Nantgaredig</dt><dd>≈ ${(q * M.NANT_AREA).toFixed(0)} m³/s ${(cond.gauge || []).some(g => g.date === new Date(end).toISOString().slice(0, 10)) ? '(gauged)' : '(estimated from rain)'}</dd>
     <dt>Travel time</dt><dd>Llandovery to Carmarthen ≈ ${(Math.pow(q, -0.25) * (M.potential('tywi', 37) - M.potential('tywi', 88)) / 3600).toFixed(0)} hours</dd>
-    <dt>Updated</dt><dd>${cond.updatedAt ? esc(fmtDate(cond.updatedAt)) + (cond.source ? ' · ' + esc(cond.source) : '') : 'Never'}</dd>`;
+    <dt>Rain data</dt><dd>${state.rainAuto ? 'Open-Meteo, fetched ' + esc(fmtDate(state.rainFetched)) : 'Couldn\'t reach Open-Meteo; using entered values only'}</dd>`;
   renderCondEdit();
 }
 let condEditDrawn = false;
 function renderCondEdit() {
   const box = $('condEdit');
   if (!state.canEdit || !state.db) {
-    box.innerHTML = '<p class="small">Rain and flow figures are kept up to date by the page editors, from the Met Office and the Natural Resources Wales river gauge at Nantgaredig.</p>';
+    box.innerHTML = '<p class="small">Rainfall updates automatically from Open-Meteo (which includes Met Office models) every time the page opens. Gauged flows can be added by an editor.</p>';
     condEditDrawn = false; return;
   }
   if (condEditDrawn) return;
@@ -961,18 +968,18 @@ function renderCondEdit() {
   const today = new Date().toISOString().slice(0, 10);
   box.innerHTML = `
     <h2 style="margin-top:14px">Update rain and flow</h2>
-    <p class="small">Enter the day's total rainfall for the Tywi valley (Met Office) and, if you have it, the mean flow at the Nantgaredig gauge (Natural Resources Wales river levels).</p>
+    <p class="small">Rainfall fills in automatically. Anything you enter here overrides it for that day. Add the mean flow at the Nantgaredig gauge (Natural Resources Wales river levels) when you have it.</p>
     <div class="row2 field"><div><label for="cDate">Date</label><input type="date" id="cDate" value="${today}"></div>
     <div><label for="cRain">Rainfall (mm)</label><input type="number" id="cRain" step="0.1" min="0"></div></div>
     <div class="field"><label for="cFlow">Gauged flow at Nantgaredig (m³/s, optional)</label><input type="number" id="cFlow" step="0.1" min="0"></div>
-    <div class="row2 field"><div><label for="cBgN">Background nitrate (blank = auto)</label><input type="number" id="cBgN" step="0.1" min="0" value="${state.cond && state.cond.background && state.cond.background.nitrate || ''}"></div>
-    <div><label for="cBgP">Background phosphate (blank = auto)</label><input type="number" id="cBgP" step="0.001" min="0" value="${state.cond && state.cond.background && state.cond.background.phosphate || ''}"></div></div>
+    <div class="row2 field"><div><label for="cBgN">Background nitrate (blank = auto)</label><input type="number" id="cBgN" step="0.1" min="0" value="${state.condDb && state.condDb.background && state.condDb.background.nitrate || ''}"></div>
+    <div><label for="cBgP">Background phosphate (blank = auto)</label><input type="number" id="cBgP" step="0.001" min="0" value="${state.condDb && state.condDb.background && state.condDb.background.phosphate || ''}"></div></div>
     <button class="btn" id="cSave" type="button">Save rain and flow</button><div id="cMsg"></div>`;
   $('cSave').onclick = async () => {
     const say = (t, cls) => $('cMsg').innerHTML = `<div class="msg ${cls}">${esc(t)}</div>`;
     const date = $('cDate').value, rain = $('cRain').value, flow = $('cFlow').value;
     if (!date) return say('Choose a date.', 'err');
-    const cur = state.cond ? JSON.parse(JSON.stringify(state.cond)) : {};
+    const cur = state.condDb ? JSON.parse(JSON.stringify(state.condDb)) : {};
     cur.days = (cur.days || []).filter(d => d.date !== date || rain === '');
     if (rain !== '') cur.days.push({ date, rain_mm: +rain });
     cur.days.sort((a, b) => a.date < b.date ? -1 : 1);
@@ -983,41 +990,70 @@ function renderCondEdit() {
     cur.background = { nitrate: $('cBgN').value === '' ? null : +$('cBgN').value, phosphate: $('cBgP').value === '' ? null : +$('cBgP').value };
     cur.updatedAt = new Date().toISOString(); cur.source = 'Entered by an editor';
     try { await state.db.doc('conditions/current').set(cur); say('Saved. Flows and the analysis have been updated.', 'ok'); $('cRain').value = ''; $('cFlow').value = ''; }
-    catch (e) { say(e && e.code === 'invalid_argument' ? 'Only page editors can change rain and flow.' : 'That didn\'t save. Try again.', 'err'); }
+    catch (e) { say('That didn\'t save. Check your connection and try again.', 'err'); }
   };
 }
 
 /* ---------- data connection ---------- */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDExYXUQoOVscdznpao2EeGwwzWR28jgfI",
+  authDomain: "tywi-tracer.firebaseapp.com",
+  projectId: "tywi-tracer",
+  storageBucket: "tywi-tracer.firebasestorage.app",
+  messagingSenderId: "74331176754",
+  appId: "1:74331176754:web:7949783ae2d3307662212b"
+};
+const DEMO = [{"lat": 51.90765, "lng": -3.81078, "takenAt": "2026-09-28T10:43:00Z", "nitrate": 2.7, "demo": true, "by": "demo", "phosphate": 0.046}, {"lat": 51.9196, "lng": -4.12, "takenAt": "2026-09-28T14:28:00Z", "nitrate": 3, "demo": true, "by": "demo", "phosphate": 0.012}, {"lat": 51.86169, "lng": -4.14748, "takenAt": "2026-09-28T11:09:00Z", "nitrate": 5.1, "demo": true, "by": "demo", "phosphate": 0.291}, {"lat": 51.92484, "lng": -3.91944, "takenAt": "2026-09-29T08:21:00Z", "nitrate": 2.3, "demo": true, "by": "demo", "phosphate": 0.021}, {"lat": 52.0679, "lng": -3.92498, "takenAt": "2026-09-29T17:27:00Z", "nitrate": 2.8, "demo": true, "by": "demo", "phosphate": 0.028}, {"lat": 51.86732, "lng": -4.0651, "takenAt": "2026-09-29T11:47:00Z", "nitrate": 5.4, "demo": true, "by": "demo"}, {"lat": 51.86181, "lng": -4.23055, "takenAt": "2026-09-29T09:55:00Z", "nitrate": 4.1, "demo": true, "by": "demo", "phosphate": 0.14}, {"lat": 51.89553, "lng": -4.14533, "takenAt": "2026-09-30T14:14:00Z", "nitrate": 2.3, "demo": true, "by": "demo"}, {"lat": 51.90463, "lng": -3.8005, "takenAt": "2026-09-30T17:33:00Z", "nitrate": 3.3, "demo": true, "by": "demo"}, {"lat": 51.96069, "lng": -3.85211, "takenAt": "2026-09-30T09:41:00Z", "nitrate": 3.2, "demo": true, "by": "demo", "phosphate": 0.032}, {"lat": 51.89649, "lng": -3.96682, "takenAt": "2026-10-01T16:33:00Z", "nitrate": 2.9, "demo": true, "by": "demo", "phosphate": 0.067}, {"lat": 51.93359, "lng": -3.86996, "takenAt": "2026-10-01T09:38:00Z", "nitrate": 2.4, "demo": true, "by": "demo", "phosphate": 0.014}, {"lat": 52.03897, "lng": -3.96779, "takenAt": "2026-10-01T15:21:00Z", "nitrate": 3.1, "demo": true, "by": "demo"}, {"lat": 52.0065, "lng": -3.77907, "takenAt": "2026-10-01T17:54:00Z", "nitrate": 3.2, "demo": true, "by": "demo"}, {"lat": 52.10998, "lng": -3.76011, "takenAt": "2026-10-02T17:11:00Z", "nitrate": 3.6, "demo": true, "by": "demo", "phosphate": 0.031}, {"lat": 51.92892, "lng": -3.91293, "takenAt": "2026-10-02T17:09:00Z", "nitrate": 3.1, "demo": true, "by": "demo", "phosphate": 0.039}, {"lat": 51.95387, "lng": -4.30074, "takenAt": "2026-10-02T12:18:00Z", "nitrate": 4.4, "demo": true, "by": "demo", "phosphate": 0.05}, {"lat": 51.95815, "lng": -4.08015, "takenAt": "2026-10-03T11:24:00Z", "nitrate": 2.5, "demo": true, "by": "demo", "phosphate": 0.048}, {"lat": 51.85206, "lng": -4.30652, "takenAt": "2026-10-03T17:21:00Z", "nitrate": 3.4, "demo": true, "by": "demo"}, {"lat": 51.9289, "lng": -3.86039, "takenAt": "2026-10-03T14:42:00Z", "nitrate": 2.7, "demo": true, "by": "demo", "phosphate": 0.024}, {"lat": 51.87835, "lng": -4.00486, "takenAt": "2026-10-03T16:20:00Z", "nitrate": 3.8, "demo": true, "by": "demo", "phosphate": 0.048}, {"lat": 51.94877, "lng": -3.87686, "takenAt": "2026-10-03T17:41:00Z", "nitrate": 3.1, "demo": true, "by": "demo", "phosphate": 0.056}, {"lat": 52.02845, "lng": -3.97813, "takenAt": "2026-10-03T15:42:00Z", "nitrate": 2.9, "demo": true, "by": "demo", "phosphate": 0.056}, {"lat": 51.879, "lng": -4.00491, "takenAt": "2026-10-04T08:41:00Z", "nitrate": 4.4, "demo": true, "by": "demo", "phosphate": 0.108}, {"lat": 51.87477, "lng": -4.17045, "takenAt": "2026-10-04T16:11:00Z", "nitrate": 4.8, "demo": true, "by": "demo", "phosphate": 0.147}, {"lat": 51.95476, "lng": -3.8649, "takenAt": "2026-10-04T12:33:00Z", "nitrate": 3.6, "demo": true, "by": "demo", "phosphate": 0.018}, {"lat": 51.85707, "lng": -4.29763, "takenAt": "2026-10-04T11:36:00Z", "nitrate": 3.7, "demo": true, "by": "demo", "phosphate": 0.112}, {"lat": 52.05109, "lng": -3.94911, "takenAt": "2026-10-04T12:07:00Z", "nitrate": 3.1, "demo": true, "by": "demo", "phosphate": 0.063}, {"lat": 52.0837, "lng": -3.76937, "takenAt": "2026-10-04T11:24:00Z", "nitrate": 2.6, "demo": true, "by": "demo", "phosphate": 0.086}, {"lat": 51.93031, "lng": -3.85991, "takenAt": "2026-10-05T11:27:00Z", "nitrate": 2.7, "demo": true, "by": "demo", "phosphate": 0.046}, {"lat": 51.97218, "lng": -4.06597, "takenAt": "2026-10-05T15:19:00Z", "nitrate": 2.8, "demo": true, "by": "demo"}, {"lat": 52.11426, "lng": -3.75874, "takenAt": "2026-10-05T16:37:00Z", "nitrate": 2.7, "demo": true, "by": "demo", "phosphate": 0.02}, {"lat": 51.88408, "lng": -3.98849, "takenAt": "2026-10-06T15:17:00Z", "nitrate": 3.2, "demo": true, "by": "demo"}, {"lat": 51.952, "lng": -3.87187, "takenAt": "2026-10-06T11:38:00Z", "nitrate": 3.3, "demo": true, "by": "demo"}, {"lat": 51.96681, "lng": -4.07118, "takenAt": "2026-10-06T12:05:00Z", "nitrate": 2.4, "demo": true, "by": "demo", "phosphate": 0.026}, {"lat": 51.85401, "lng": -4.30577, "takenAt": "2026-10-06T14:07:00Z", "nitrate": 3.6, "demo": true, "by": "demo", "phosphate": 0.085}, {"lat": 51.8929, "lng": -4.15048, "takenAt": "2026-10-07T10:32:00Z", "nitrate": 6.1, "demo": true, "by": "demo", "phosphate": 0.235}, {"lat": 51.95053, "lng": -4.08682, "takenAt": "2026-10-07T08:42:00Z", "nitrate": 2.6, "demo": true, "by": "demo", "phosphate": 0.019}, {"lat": 51.93271, "lng": -4.29979, "takenAt": "2026-10-07T15:56:00Z", "nitrate": 2.4, "demo": true, "by": "demo"}, {"lat": 51.88744, "lng": -3.98135, "takenAt": "2026-10-07T12:19:00Z", "nitrate": 3.8, "demo": true, "by": "demo", "phosphate": 0.089}, {"lat": 51.8556, "lng": -4.30467, "takenAt": "2026-10-07T17:38:00Z", "nitrate": 4.1, "demo": true, "by": "demo", "phosphate": 0.093}, {"lat": 51.97296, "lng": -3.83289, "takenAt": "2026-10-07T11:37:00Z", "nitrate": 3.4, "demo": true, "by": "demo", "phosphate": 0.06}];
 function setStatus(t) { $('status').textContent = t; }
+function mergeCond() {
+  const db = state.condDb || {};
+  const days = {};
+  (state.rainAuto || []).forEach(d => days[d.date] = d.rain_mm);
+  (db.days || []).forEach(d => days[d.date] = d.rain_mm);
+  state.cond = { days: Object.entries(days).map(([date, rain_mm]) => ({ date, rain_mm })), gauge: db.gauge || [], background: db.background || {} };
+}
+function demoButton() { return state.db ? '<div style="margin-top:10px"><button class="btn" id="loadDemo" type="button">Load demo readings</button></div>' : ''; }
+function wireDemo() {
+  const b = $('loadDemo'); if (!b) return;
+  b.onclick = async () => {
+    b.disabled = true; b.textContent = 'Loading…';
+    try {
+      const batch = state.db.batch();
+      DEMO.forEach((r, i) => batch.set(state.db.collection('readings').doc('demo-' + String(i).padStart(2, '0')), { ...r, createdAt: r.takenAt }));
+      await batch.commit();
+    } catch (e) { b.disabled = false; b.textContent = 'Load demo readings'; alert('The demo readings couldn\'t be saved. Check the database rules in Firebase.'); }
+  };
+}
+async function fetchRain() {
+  try {
+    const u = 'https://api.open-meteo.com/v1/forecast?latitude=51.95&longitude=-3.95&daily=precipitation_sum&past_days=92&forecast_days=1&timezone=Europe%2FLondon';
+    const r = await fetch(u); if (!r.ok) throw 0;
+    const j = await r.json();
+    state.rainAuto = j.daily.time.map((t, i) => ({ date: t, rain_mm: j.daily.precipitation_sum[i] })).filter(d => d.rain_mm != null);
+    state.rainFetched = Date.now();
+  } catch (e) { state.rainAuto = null; }
+  mergeCond(); recompute();
+}
+try { state.me = localStorage.getItem('tywi-id'); if (!state.me) { state.me = 'dev-' + Math.random().toString(36).slice(2, 12); localStorage.setItem('tywi-id', state.me); } $('who').value = localStorage.getItem('tywi-name') || ''; } catch (e) { state.me = 'dev-' + Math.random().toString(36).slice(2, 12); }
+state.canEdit = /editor/.test(location.hash);
+state.canWrite = true;
+mergeCond();
 doRecompute();
-(async () => {
-  let db = null, user = null;
-  try { [db, user] = await Promise.all([claude.use('db'), claude.use('user')]); } catch (e) {}
-  state.user = user;
-  if (user) {
-    try { state.me = await user.id(); } catch (e) {}
-    try { state.canEdit = await user.canEdit(); } catch (e) {}
-    try { state.canWrite = await user.can('data.write'); } catch (e) {}
-  }
-  if (!db) {
-    setStatus('Offline view: open in Claude to see shared readings');
-    $('logIntro').textContent = 'Saving readings needs this page to be opened in Claude while signed in.';
-    return;
-  }
-  state.db = db;
-  if (state.canWrite === false) $('logIntro').textContent = 'You can view the analysis. To add readings, ask the page owner for Contributor access.';
-  db.collection('readings').onSnapshot(snap => {
+fetchRain();
+try {
+  firebase.initializeApp(FIREBASE_CONFIG);
+  state.db = firebase.firestore();
+} catch (e) { state.db = null; }
+if (!state.db) {
+  setStatus('Not connected to the reading store');
+  $('logIntro').textContent = 'The reading store couldn\'t load. Check your connection and reload.';
+} else {
+  state.db.collection('readings').onSnapshot(snap => {
     state.readings = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => isFinite(r.lat) && isFinite(r.lng) && r.takenAt);
     setStatus(`${state.readings.length} readings · live`);
-    resolveNames(); recompute();
-  }, () => setStatus('Readings stopped updating. Reload the page.'));
-  db.doc('conditions/current').onSnapshot(s => { state.cond = s.exists ? s.data() : null; condEditDrawn = false; recompute(); }, () => {});
-})();
-async function resolveNames() {
-  if (!state.user) return;
-  const ids = [...new Set(state.readings.filter(r => !r.demo && r.by).map(r => r.by))];
-  if (!ids.length) return;
-  try { const ps = await state.user.profiles(ids); ids.forEach(id => state.names[id] = (ps[id] && ps[id].name) || 'Someone'); renderList(); } catch (e) {}
+    recompute();
+  }, e => setStatus(e && e.code === 'permission-denied' ? 'Database rules are blocking reads. Update the rules in Firebase.' : 'Readings stopped updating. Reload the page.'));
+  state.db.doc('conditions/current').onSnapshot(s => { state.condDb = s.exists ? s.data() : null; condEditDrawn = false; mergeCond(); recompute(); }, () => {});
 }
 })();
 </script>
