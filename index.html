@@ -151,6 +151,7 @@ svg text.halo{paint-order:stroke;stroke:var(--land);stroke-width:3px;stroke-line
     <div class="tabbody">
 
       <div data-pane="sources">
+        <div class="demoSlot"></div>
         <div class="controls">
           <div>
             <label for="asof">Analyse up to</label>
@@ -199,6 +200,7 @@ svg text.halo{paint-order:stroke;stroke:var(--land);stroke-width:3px;stroke-line
       </div>
 
       <div data-pane="readings" class="hidden">
+        <div class="demoSlot"></div>
         <div id="demoBar"></div>
         <ul class="list" id="rlist"></ul>
       </div>
@@ -738,12 +740,12 @@ function doRecompute() {
   const asOf = state.asOfUser ? new Date(state.asOfUser + 'T23:59:59').getTime() : undefined;
   state.res = M.analyze(state.readings, state.cond, { windowDays: state.win, asOf });
   if (!state.asOfUser && state.readings.length) $('asof').value = new Date(state.res.asOf).toISOString().slice(0, 10);
-  drawOverlay(); renderSources(); renderProfile(); renderList(); renderCond();
+  drawOverlay(); renderSources(); renderProfile(); renderList(); renderCond(); if (typeof renderDemoToggle === 'function') renderDemoToggle();
 }
 
 function renderSources() {
   const out = $('sourcesOut'), res = state.res;
-  if (!state.readings.length) { out.innerHTML = '<p class="small">No readings yet. Log the first one from the "Log reading" tab, or load the demo readings to see how the tracer works.</p>' + demoButton(); wireDemo(); return; }
+  if (!state.readings.length) { out.innerHTML = '<p class="small">No readings yet. Log the first one from the "Log reading" tab, or tap "Show demo readings" to see how the tracer works.</p>'; return; }
   const n = res.readings.length;
   let h = `<p class="small">${n} reading${n === 1 ? '' : 's'} in the ${res.windowDays} days up to ${fmtDay(res.asOf)}. Background taken as ${res.bg.n.toFixed(1)} mg/L nitrate and ${res.bg.p.toFixed(3)} mg/L phosphate.</p>`;
   if (!res.sources.length) {
@@ -865,6 +867,7 @@ $('save').onclick = async () => {
   const say = (t, cls) => { msg.innerHTML = `<div class="msg ${cls || ''}">${esc(t)}</div>`; };
   if (!state.db) return say('The reading store isn\'t connected. Check your internet connection and reload the page.', 'err');
   if (state.canWrite === false) return say('You can view readings but not add them. Ask the page owner to give you Contributor access.', 'err');
+  if (state.demoView) return say('You\'re looking at the demo. Go back to real readings to log one.', 'err');
   if (!state.pending) return say('Choose where the sample was taken first.', 'err');
   const nit = $('nit').value === '' ? NaN : parseFloat($('nit').value);
   const pho = $('pho').value === '' ? NaN : parseFloat($('pho').value);
@@ -898,19 +901,19 @@ function selectReading(id) {
 }
 function renderList() {
   const ul = $('rlist'), res = state.res;
-  const demoCount = state.readings.filter(r => r.demo).length;
-  $('demoBar').innerHTML = demoCount ? `<div class="msg">${demoCount} demo readings are showing. They're simulated (two hidden pollution sources) so you can see how the tracer works. <div style="margin-top:6px"><button class="btn ghost" id="clearDemo" type="button">Remove demo readings</button></div></div>` : '';
+  const demoCount = state.demoView ? 0 : state.readings.filter(r => r.demo).length;
+  $('demoBar').innerHTML = demoCount ? `<div class="msg">${demoCount} old demo readings are saved in the database.  You can still see the demo any time with "Show demo readings", so these can go. <div style="margin-top:6px"><button class="btn ghost" id="clearDemo" type="button">Remove demo readings</button></div></div>` : '';
   const cd = $('clearDemo');
   if (cd) cd.onclick = async () => {
     if (!confirm('Remove all demo readings? Real readings stay.')) return;
     cd.disabled = true;
     for (const r of state.readings.filter(r => r.demo)) { try { await state.db.doc('readings/' + r.id).delete(); } catch (e) { break; } }
   };
-  if (!res || !res.allPrepared.length) { ul.innerHTML = '<li class="small">No readings yet.</li>' + demoButton(); wireDemo(); return; }
+  if (!res || !res.allPrepared.length) { ul.innerHTML = '<li class="small">No readings yet.</li>'; return; }
   const list = [...res.allPrepared].sort((a, b) => b.t - a.t);
   ul.innerHTML = list.map(r => {
     const who = r.demo ? 'Demo data' : (r.name || 'Someone');
-    const canDel = state.db && !r.demo && (r.by === state.me || state.canEdit);
+    const canDel = state.db && !state.demoView && !r.demo && (r.by === state.me || state.canEdit);
     return `<li data-id="${esc(r.id)}" class="${state.sel === r.id ? 'sel' : ''}">
       <span><span class="chip" style="background:${zColor(zScore(r, res.bg))}"></span><strong>${esc(RNAME[r.river])} ${r.chain.toFixed(1)} km</strong> · ${esc(fmtDate(r.takenAt))}</span>
       <span class="vals">N ${fmtV(r.nitrate, 1)} · P ${fmtV(r.phosphate, 3)}</span>
@@ -1012,17 +1015,20 @@ function mergeCond() {
   (db.days || []).forEach(d => days[d.date] = d.rain_mm);
   state.cond = { days: Object.entries(days).map(([date, rain_mm]) => ({ date, rain_mm })), gauge: db.gauge || [], background: db.background || {} };
 }
-function demoButton() { return state.db ? '<div style="margin-top:10px"><button class="btn" id="loadDemo" type="button">Load demo readings</button></div>' : ''; }
-function wireDemo() {
-  const b = $('loadDemo'); if (!b) return;
-  b.onclick = async () => {
-    b.disabled = true; b.textContent = 'Loading…';
-    try {
-      const batch = state.db.batch();
-      DEMO.forEach((r, i) => batch.set(state.db.collection('readings').doc('demo-' + String(i).padStart(2, '0')), { ...r, createdAt: r.takenAt }));
-      await batch.commit();
-    } catch (e) { b.disabled = false; b.textContent = 'Load demo readings'; alert('The demo readings couldn\'t be saved. Check the database rules in Firebase.'); }
-  };
+function setDemoView(on) {
+  state.demoView = on;
+  state.readings = on ? DEMO.map((r, i) => ({ ...r, id: 'demo-view-' + i })) : (state.dbReadings || []);
+  state.asOfUser = null; $('asof').value = '';
+  setStatus(on ? 'Demo view: nothing here is saved' : `${state.readings.length} readings · live`);
+  doRecompute();
+}
+function renderDemoToggle() {
+  document.querySelectorAll('.demoSlot').forEach(slot => {
+    slot.innerHTML = state.demoView
+      ? '<div class="msg"><strong>You\'re viewing demo readings.</strong> They\'re simulated, with two hidden pollution sources, and aren\'t saved anywhere. Real readings are untouched.<div style="margin-top:6px"><button class="btn" data-demo="off" type="button">Back to real readings</button></div></div>'
+      : '<div style="margin-bottom:12px"><button class="btn ghost" data-demo="on" type="button">Show demo readings</button></div>';
+    slot.querySelectorAll('[data-demo]').forEach(b => b.onclick = () => setDemoView(b.dataset.demo === 'on'));
+  });
 }
 async function fetchRain() {
   try {
@@ -1049,7 +1055,9 @@ if (!state.db) {
   $('logIntro').textContent = 'The reading store couldn\'t load. Check your connection and reload.';
 } else {
   state.db.collection('readings').onSnapshot(snap => {
-    state.readings = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => isFinite(r.lat) && isFinite(r.lng) && r.takenAt);
+    state.dbReadings = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => isFinite(r.lat) && isFinite(r.lng) && r.takenAt);
+    if (state.demoView) return;
+    state.readings = state.dbReadings;
     setStatus(`${state.readings.length} readings · live`);
     recompute();
   }, e => setStatus(e && e.code === 'permission-denied' ? 'Database rules are blocking reads. Update the rules in Firebase.' : 'Readings stopped updating. Reload the page.'));
