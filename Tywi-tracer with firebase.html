@@ -1,0 +1,1061 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tywi Tracer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EDEFE8; --card:#F8F9F4; --ink:#1E2B2C; --muted:#56655F; --line:#CBD2C6;
+  --river:#3A7CA0; --river-faint:#B3CCD8; --land:#E3E7DC;
+  --peat:#B8742A; --slurry:#7A2E1C; --moss:#4F7A45; --focus:#2F6B8C;
+  --serif:"Literata", Georgia, "Times New Roman", serif;
+  --sans:"Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#121A1B; --card:#192425; --ink:#E2E8E1; --muted:#97A6A1; --line:#2F3D3E;
+    --river:#6FB0D2; --river-faint:#2B4A58; --land:#162021;
+    --peat:#E2A251; --slurry:#EE7457; --moss:#8EBE80; --focus:#8CC4E2;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#121A1B; --card:#192425; --ink:#E2E8E1; --muted:#97A6A1; --line:#2F3D3E;
+  --river:#6FB0D2; --river-faint:#2B4A58; --land:#162021;
+  --peat:#E2A251; --slurry:#EE7457; --moss:#8EBE80; --focus:#8CC4E2;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding:18px 22px 10px}
+header h1{font:700 28px/1.1 var(--serif);margin:0;letter-spacing:-.01em}
+header p{margin:0;color:var(--muted);font-family:var(--serif);font-style:italic}
+.status{margin-left:auto;font-size:13px;color:var(--muted)}
+main{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(320px,400px);gap:18px;padding:0 22px 22px;align-items:start}
+@media (max-width:900px){main{grid-template-columns:1fr;padding:0 12px 16px}header{padding:14px 12px 8px}}
+.mapwrap{position:relative;background:var(--land);border:1px solid var(--line);border-radius:6px;overflow:hidden;touch-action:none}
+#map{display:block;width:100%;height:min(68vh,640px);cursor:crosshair;user-select:none}
+.mapctl{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:6px}
+.mapctl button{width:34px;height:34px;border:1px solid var(--line);background:var(--card);border-radius:4px;cursor:pointer;font-size:18px;line-height:1}
+.legend{position:absolute;left:10px;bottom:10px;background:color-mix(in srgb,var(--card) 88%,transparent);border:1px solid var(--line);border-radius:4px;padding:8px 10px;font-size:12px;line-height:1.7;max-width:230px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.legend .bar{display:inline-block;width:60px;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--peat),var(--slurry));margin-right:6px;vertical-align:1px}
+.hint{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:var(--ink);color:var(--paper);font-size:13px;padding:5px 10px;border-radius:4px;pointer-events:none;opacity:0;transition:opacity .2s}
+.hint.show{opacity:.92}
+.profile{margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px 14px 8px}
+.profile-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.profile h2,.panel h2{font:600 17px/1.3 var(--serif);margin:0}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden;margin-left:auto}
+.seg button{border:0;background:transparent;padding:3px 10px;cursor:pointer;font-size:13px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+#profile{width:100%;height:210px;display:block}
+.small{font-size:13px;color:var(--muted)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:6px}
+.tabs{display:flex;overflow-x:auto;border-bottom:1px solid var(--line)}
+.tabs button{flex:1 0 auto;border:0;background:none;padding:11px 9px;cursor:pointer;font-size:14px;color:var(--muted);border-bottom:2px solid transparent}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--river);font-weight:600}
+.tabbody{padding:16px;max-height:calc(68vh + 260px);overflow-y:auto}
+@media (max-width:900px){.tabbody{max-height:none}}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 14px}
+label{display:block;font-size:13px;color:var(--muted);margin-bottom:3px}
+input[type=text],input[type=number],input[type=date],input[type=datetime-local],textarea{width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:4px;background:var(--paper)}
+input[type=range]{width:100%;accent-color:var(--river)}
+.field{margin-bottom:12px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{display:inline-block;border:1px solid var(--ink);background:var(--ink);color:var(--paper);padding:8px 14px;border-radius:4px;cursor:pointer;font-weight:600}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.source{border-top:1px solid var(--line);padding:14px 0 4px}
+.source:first-of-type{border-top:0;padding-top:4px}
+.source h3{font:600 16px/1.35 var(--serif);margin:0 0 6px;display:flex;gap:10px;align-items:baseline}
+.badge{font:600 12px/1 var(--sans);padding:4px 7px;border-radius:3px;white-space:nowrap}
+.badge.strong{background:var(--slurry);color:var(--card)}
+.badge.moderate{background:var(--peat);color:var(--card)}
+.badge.weak{border:1px solid var(--muted);color:var(--muted)}
+dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:8px 0;font-size:14px}
+dt{color:var(--muted)} dd{margin:0}
+.next{background:var(--paper);border-left:3px solid var(--river);padding:8px 10px;font-size:14px;margin:10px 0}
+.msg{padding:9px 11px;border-radius:4px;font-size:14px;margin:8px 0;background:var(--paper);border:1px solid var(--line)}
+.msg.err{border-color:var(--slurry);color:var(--slurry)}
+.msg.ok{border-color:var(--moss)}
+ul.list{list-style:none;margin:0;padding:0}
+ul.list li{border-top:1px solid var(--line);padding:9px 0;display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:14px;cursor:pointer}
+ul.list li:first-child{border-top:0}
+ul.list li.sel{background:color-mix(in srgb,var(--river) 12%,transparent)}
+.vals{font-variant-numeric:tabular-nums;text-align:right}
+.del{border:0;background:none;color:var(--muted);cursor:pointer;font-size:13px;text-decoration:underline;padding:0}
+.method p,.method li{font-size:14px}
+.method h3{font:600 15px/1.3 var(--serif);margin:16px 0 4px}
+.eq{font-family:var(--serif);font-style:italic;background:var(--paper);padding:6px 9px;border-radius:4px;margin:6px 0;overflow-x:auto;white-space:nowrap}
+#rainchart{width:100%;height:150px;display:block}
+.chip{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:0}
+.hidden{display:none!important}
+svg text.halo{paint-order:stroke;stroke:var(--land);stroke-width:3px;stroke-linejoin:round}
+@media (max-width:600px){.legend{position:static;max-width:none;border:0;border-top:1px solid var(--line);border-radius:0;display:flex;flex-wrap:wrap;gap:2px 14px;background:var(--card)} #map{height:62vh}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Tywi Tracer</h1>
+  <p>Olrhain llygredd ar Afon Tywi: finding where pollution enters the river</p>
+  <span class="status" id="status">Loading readings…</span>
+</header>
+<main>
+  <section>
+    <div class="mapwrap" id="mapwrap">
+      <svg id="map" role="img" aria-label="Map of the River Tywi and its tributaries with test readings and likely pollution entry stretches"></svg>
+      <div class="mapctl">
+        <button id="zin" aria-label="Zoom in">+</button>
+        <button id="zout" aria-label="Zoom out">−</button>
+        <button id="zreset" aria-label="Reset view" style="font-size:13px">⤢</button>
+      </div>
+      <div class="hint" id="hint"></div>
+      <div class="legend">
+        <div><i style="background:var(--moss)"></i>Reading near background</div>
+        <div><i style="background:var(--peat)"></i>Raised</div>
+        <div><i style="background:var(--slurry)"></i>Well above background</div>
+        <div><span class="bar"></span>Likely entry stretch</div>
+        <div><i style="background:none;border:2px solid var(--river)"></i>Best next test site</div>
+      </div>
+    </div>
+    <div class="profile">
+      <div class="profile-head">
+        <h2>Along the main Tywi</h2>
+        <span class="small">Source at left, sea at right. Line = model fit, dots = readings, values in mg/L.</span>
+        <div class="seg" role="group" aria-label="Nutrient">
+          <button data-nut="n" aria-pressed="true">Nitrate</button>
+          <button data-nut="p" aria-pressed="false">Phosphate</button>
+        </div>
+      </div>
+      <svg id="profile" aria-label="Concentration along the main river"></svg>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="sources" aria-selected="true">Sources</button>
+      <button role="tab" data-tab="log" aria-selected="false">Log reading</button>
+      <button role="tab" data-tab="readings" aria-selected="false">Readings</button>
+      <button role="tab" data-tab="cond" aria-selected="false">Rain &amp; flow</button>
+      <button role="tab" data-tab="method" aria-selected="false">Method</button>
+    </div>
+    <div class="tabbody">
+
+      <div data-pane="sources">
+        <div class="controls">
+          <div>
+            <label for="asof">Analyse up to</label>
+            <input type="date" id="asof">
+          </div>
+          <div>
+            <label for="win">Look back <span id="winv">10</span> days</label>
+            <input type="range" id="win" min="3" max="30" value="10">
+          </div>
+        </div>
+        <div id="sourcesOut"><p class="small">Waiting for readings.</p></div>
+      </div>
+
+      <div data-pane="log" class="hidden">
+        <p class="small" id="logIntro">Tap the river on the map where you took the sample, or use your phone's location.</p>
+        <div class="field">
+          <label>Location</label>
+          <div id="locOut" class="msg">No location yet.</div>
+          <div class="row2">
+            <input type="text" id="lat" placeholder="Latitude e.g. 51.884" inputmode="decimal" aria-label="Latitude">
+            <input type="text" id="lng" placeholder="Longitude e.g. -3.988" inputmode="decimal" aria-label="Longitude">
+          </div>
+          <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn ghost" id="useLoc" type="button">Use my location</button>
+            <button class="btn ghost" id="checkLoc" type="button">Check coordinates</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="who">Your name (optional, shown with your readings)</label>
+          <input type="text" id="who" maxlength="40" autocomplete="name">
+        </div>
+        <div class="field">
+          <label for="when">Date and time of sample</label>
+          <input type="datetime-local" id="when">
+        </div>
+        <div class="row2 field">
+          <div><label for="nit">Nitrate (mg/L NO₃)</label><input type="number" id="nit" step="0.1" min="0"></div>
+          <div><label for="pho">Phosphate (mg/L PO₄)</label><input type="number" id="pho" step="0.001" min="0"></div>
+        </div>
+        <div class="field">
+          <label for="note">Note (optional)</label>
+          <textarea id="note" rows="2" placeholder="e.g. brown water, smell, cattle by bank"></textarea>
+        </div>
+        <button class="btn" id="save" type="button">Save reading</button>
+        <div id="saveMsg"></div>
+      </div>
+
+      <div data-pane="readings" class="hidden">
+        <div id="demoBar"></div>
+        <ul class="list" id="rlist"></ul>
+      </div>
+
+      <div data-pane="cond" class="hidden">
+        <h2>Rainfall, last 14 days</h2>
+        <svg id="rainchart" aria-label="Daily rainfall"></svg>
+        <dl id="flowOut"></dl>
+        <div id="condEdit"></div>
+      </div>
+
+      <div data-pane="method" class="hidden method">
+        <h2>How the tracer works</h2>
+        <p>Pollution only travels downstream. If a reading is clean and the next reading downstream is high, something entered the river in between. The tracer turns that idea into numbers for every half-kilometre of river at once, and keeps updating as people log new readings.</p>
+        <h3>1. Put every reading on the river</h3>
+        <p>Each reading is snapped to the nearest point on the mapped river network (the Tywi plus the Brân, Sawdde, Cothi and Gwili) and given a distance from source in km. The mapped lines are simplified, so they are stretched by a winding factor of 1.25 to match real channel length.</p>
+        <h3>2. Work out how much water is flowing</h3>
+        <p>Drainage area grows downstream following Hack's law, plus each tributary's whole catchment where it joins:</p>
+        <div class="eq">A(x) = c · x<sup>1.7</sup> + Σ A<sub>tributaries above x</sub></div>
+        <p>Flow per km² of catchment depends on recent rain, using an antecedent precipitation index where yesterday's rain counts 80% as much as today's:</p>
+        <div class="eq">API = Σ<sub>d=0..13</sub> rain<sub>d</sub> · 0.8<sup>d</sup> &nbsp;&nbsp; q = 0.012 + 0.004 · API &nbsp;&nbsp; Q = A · q</div>
+        <p>If a gauged flow at Nantgaredig is entered for that day, it replaces the rain estimate.</p>
+        <h3>3. Travel time and dilution</h3>
+        <p>Water speeds up as flow rises, <span class="eq" style="display:inline;padding:1px 5px">v = 0.3 · Q<sup>0.25</sup> m/s</span>. Travel time from a possible entry point to a sample site is the integral of 1/v along the path, crossing confluences. A pollutant load L (g/s) entering upstream raises the concentration at a sample site by:</p>
+        <div class="eq">ΔC = L · e<sup>−kτ</sup> / Q</div>
+        <p>τ is travel time in days, k is natural loss (0.05/day for nitrate, 0.3/day for phosphate, which sticks to sediment and gets taken up by plants), and dividing by Q is dilution.</p>
+        <h3>4. Test every possible entry point</h3>
+        <p>For each half-km stretch of the network, and each possible start day, the tracer finds the load that best explains all readings by weighted least squares, then scores how much better that explains the data than "no extra source":</p>
+        <div class="eq">score = Σ w<sub>i</sub> (y<sub>i</sub> − b)² / σ<sub>i</sub>² − Σ w<sub>i</sub> (y<sub>i</sub> − b − ΔC<sub>i</sub>)² / σ<sub>i</sub>²</div>
+        <p>b is the background level (the lower 20% of recent readings unless set), σ is the expected error of a home test kit plus model error, and w halves the weight of a reading every half of the look-back window, so recent readings count more. Nitrate and phosphate are scored together, because slurry raises both.</p>
+        <h3>5. Turn scores into probabilities</h3>
+        <p>Scores become probabilities with Bayes' rule, P ∝ e<sup>score/2</sup>. The highlighted stretch holds 80% of the probability. If no stretch scores above 9 (roughly a 3-sigma signal) nothing is flagged. After finding the strongest source the tracer removes its effect and looks again, up to three sources.</p>
+        <h3>6. Where to test next</h3>
+        <p>The best next test site splits the likely stretch in half by probability. Whatever that reading shows, the search area roughly halves, like a binary search.</p>
+        <h3>Limits</h3>
+        <ul>
+          <li>River lines and catchment sizes are approximate; flow is estimated, not measured, unless a gauge reading is added.</li>
+          <li>Below Carmarthen the river is tidal, so those readings get three times the uncertainty.</li>
+          <li>Nitrate and phosphate alone can't tell slurry from sewage or fertiliser. Ammonia readings and known sewage overflow locations would help separate them.</li>
+          <li>A flagged stretch is a place to look, not proof. Confirm on the ground and report to Natural Resources Wales.</li>
+        </ul>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// Tywi Tracer model: river network, hydrology, and source-location inverse model.
+const TywiModel = (() => {
+  const LAT0 = 51.95;
+  const KX = 111.32 * Math.cos(LAT0 * Math.PI / 180);
+  const KY = 110.57;
+  const SINUOSITY = 1.25;      // mapped polyline -> real channel length
+  const DX = 0.25;             // km, integration step
+  const CAND_STEP = 0.5;       // km, candidate source spacing
+  const DECAY = { n: 0.05, p: 0.3 };   // first-order loss per day
+  const Q0 = 0.012, BETA = 0.004;      // specific runoff m3/s/km2 = Q0 + BETA*API
+  const API_K = 0.8, API_DAYS = 14;
+  const NANT_AREA = 1090;              // km2 above Nantgaredig gauge (approx.)
+
+  const proj = (lat, lng) => [(lng + 4.0) * KX, (LAT0 - lat) * KY];
+  const unproj = (x, y) => [LAT0 - y / KY, x / KX - 4.0];
+
+  const RIVERS = [
+    { id: 'tywi', name: 'Tywi', parent: null, pts: [
+      [52.262,-3.736],[52.215,-3.745],[52.170,-3.760],[52.130,-3.755],[52.100,-3.762],[52.075,-3.775],
+      [52.040,-3.790],[52.000,-3.803],[51.965,-3.845],[51.943,-3.890],[51.915,-3.935],[51.884,-3.988],
+      [51.870,-4.040],[51.865,-4.100],[51.862,-4.150],[51.865,-4.190],[51.862,-4.240],[51.862,-4.275],
+      [51.855,-4.305],[51.830,-4.330],[51.800,-4.360],[51.770,-4.385],[51.745,-4.400]] },
+    { id: 'bran', name: 'Brân', parent: 'tywi', total: 70, pts: [
+      [52.050,-3.690],[52.030,-3.730],[52.010,-3.770],[51.999,-3.801]] },
+    { id: 'sawdde', name: 'Sawdde', parent: 'tywi', total: 80, pts: [
+      [51.882,-3.742],[51.900,-3.790],[51.920,-3.840],[51.942,-3.887]] },
+    { id: 'cothi', name: 'Cothi', parent: 'tywi', total: 290, pts: [
+      [52.140,-3.800],[52.100,-3.860],[52.070,-3.920],[52.048,-3.957],[52.010,-4.000],[51.978,-4.060],
+      [51.940,-4.100],[51.900,-4.140],[51.877,-4.172],[51.863,-4.170]] },
+    { id: 'gwili', name: 'Gwili', parent: 'tywi', total: 130, pts: [
+      [51.990,-4.300],[51.950,-4.302],[51.920,-4.300],[51.890,-4.290],[51.862,-4.276]] },
+  ];
+  const TOWNS = [
+    ['Llyn Brianne',52.128,-3.752],['Rhandirmwyn',52.078,-3.772],['Llandovery',51.995,-3.797],
+    ['Llangadog',51.940,-3.893],['Llandeilo',51.884,-3.990],['Dryslwyn',51.866,-4.100],
+    ['Nantgaredig',51.866,-4.190],['Carmarthen',51.857,-4.310],['Llansteffan',51.770,-4.390],
+    ['Pumsaint',52.048,-3.957],['Abergorlech',51.980,-4.062],['Brechfa',51.954,-4.150],
+  ];
+  const TIDAL_LIMIT_LAT = 51.857; // main stem below Carmarthen treated as tidal
+
+  const byId = {};
+  RIVERS.forEach(r => { byId[r.id] = r; });
+
+  // geometry
+  RIVERS.forEach(r => {
+    r.xy = r.pts.map(p => proj(p[0], p[1]));
+    r.cum = [0];
+    for (let i = 1; i < r.xy.length; i++) {
+      const d = Math.hypot(r.xy[i][0] - r.xy[i-1][0], r.xy[i][1] - r.xy[i-1][1]) * SINUOSITY;
+      r.cum.push(r.cum[i-1] + d);
+    }
+    r.length = r.cum[r.cum.length - 1];
+    r.children = [];
+  });
+
+  function nearestOn(r, x, y) {
+    let best = null;
+    for (let i = 1; i < r.xy.length; i++) {
+      const [ax, ay] = r.xy[i-1], [bx, by] = r.xy[i];
+      const dx = bx - ax, dy = by - ay, L2 = dx*dx + dy*dy;
+      let t = L2 ? ((x - ax) * dx + (y - ay) * dy) / L2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      const px = ax + t*dx, py = ay + t*dy;
+      const d = Math.hypot(x - px, y - py);
+      if (!best || d < best.dist) best = { dist: d, chain: r.cum[i-1] + t * (r.cum[i] - r.cum[i-1]), x: px, y: py };
+    }
+    return best;
+  }
+
+  RIVERS.forEach(r => {
+    if (!r.parent) return;
+    const p = byId[r.parent];
+    const end = r.xy[r.xy.length - 1];
+    r.conf = nearestOn(p, end[0], end[1]).chain;
+    p.children.push(r);
+  });
+
+  // drainage area via Hack's law, A = c * L^1.7 (+ tributary totals below confluences)
+  const tywi = byId.tywi;
+  RIVERS.forEach(r => { if (r.parent) r.c = r.total / Math.pow(r.length, 1.7); });
+  const nant = nearestOn(tywi, ...proj(51.865, -4.190)).chain;
+  const tribAboveNant = tywi.children.filter(c => c.conf <= nant).reduce((s, c) => s + c.total, 0);
+  tywi.c = (NANT_AREA - tribAboveNant) / Math.pow(nant, 1.7);
+  tywi.nantChain = nant;
+
+  function area(rid, chain) {
+    const r = byId[rid];
+    let a = r.c * Math.pow(Math.max(chain, 0.3), 1.7);
+    r.children.forEach(c => { if (c.conf <= chain) a += c.total; });
+    return Math.max(a, 0.5);
+  }
+
+  // travel-time potential: v = 0.3 (A q)^0.25 m/s, so t = q^-0.25 * S, S = ∫ ds / (0.3 A^0.25)
+  RIVERS.forEach(r => {
+    const n = Math.ceil(r.length / DX);
+    r.S = new Float64Array(n + 1);
+    for (let i = 1; i <= n; i++) {
+      const mid = (i - 0.5) * DX;
+      r.S[i] = r.S[i-1] + (DX * 1000) / (0.3 * Math.pow(area(r.id, mid), 0.25));
+    }
+  });
+  function Sat(r, chain) {
+    const f = Math.max(0, Math.min(chain, r.length)) / DX;
+    const i = Math.min(Math.floor(f), r.S.length - 2);
+    return r.S[i] + (f - i) * (r.S[i+1] - r.S[i]);
+  }
+  function potential(rid, chain) { // q-free seconds to river mouth
+    const r = byId[rid];
+    const here = Sat(r, r.length) - Sat(r, chain);
+    return r.parent ? here + potential(r.parent, r.conf) : here;
+  }
+  function pathDown(rid, chain) { // list of [river, from-chain] walking downstream
+    const out = [[rid, chain]];
+    let r = byId[rid];
+    while (r.parent) { out.push([r.parent, r.conf]); r = byId[r.parent]; }
+    return out;
+  }
+  function isDownstream(src, pt) {
+    return pathDown(src.river, src.chain).some(([rid, x]) => rid === pt.river && pt.chain >= x - 1e-9);
+  }
+
+  function snap(lat, lng) {
+    const [x, y] = proj(lat, lng);
+    let best = null;
+    RIVERS.forEach(r => {
+      const n = nearestOn(r, x, y);
+      if (!best || n.dist < best.dist) best = { ...n, river: r.id };
+    });
+    const [slat, slng] = unproj(best.x, best.y);
+    const tidal = best.river === 'tywi' && slat < TIDAL_LIMIT_LAT && slng < -4.30;
+    return { river: best.river, chain: best.chain, dist: best.dist, lat: slat, lng: slng, tidal };
+  }
+  function pointAt(rid, chain) {
+    const r = byId[rid];
+    for (let i = 1; i < r.cum.length; i++) {
+      if (chain <= r.cum[i] || i === r.cum.length - 1) {
+        const t = Math.max(0, Math.min(1, (chain - r.cum[i-1]) / (r.cum[i] - r.cum[i-1])));
+        const x = r.xy[i-1][0] + t * (r.xy[i][0] - r.xy[i-1][0]);
+        const y = r.xy[i-1][1] + t * (r.xy[i][1] - r.xy[i-1][1]);
+        return unproj(x, y);
+      }
+    }
+  }
+
+  // hydrology from rainfall
+  const dayStr = d => new Date(d).toISOString().slice(0, 10);
+  function rainMap(cond) {
+    const m = {};
+    (cond && cond.days || []).forEach(d => { m[d.date] = +d.rain_mm || 0; });
+    return m;
+  }
+  function apiOn(cond, date) {
+    const m = rainMap(cond);
+    let s = 0;
+    const t = new Date(dayStr(date) + 'T12:00:00Z').getTime();
+    for (let d = 0; d < API_DAYS; d++) s += (m[dayStr(t - d * 864e5)] || 0) * Math.pow(API_K, d);
+    return s;
+  }
+  function qSpec(cond, date) {
+    const ds = dayStr(date);
+    const g = (cond && cond.gauge || []).find(x => x.date === ds);
+    if (g && +g.m3s > 0) return +g.m3s / NANT_AREA;
+    return Q0 + BETA * apiOn(cond, date);
+  }
+
+  function sigma(n, y, tidal) {
+    const s = n === 'n' ? 0.4 + 0.15 * y : 0.025 + 0.2 * y; // kit error + model error
+    return tidal ? s * 3 : s;
+  }
+
+  // candidates
+  const CANDS = [];
+  RIVERS.forEach(r => {
+    for (let x = CAND_STEP / 2; x < r.length; x += CAND_STEP) {
+      CANDS.push({ river: r.id, chain: x, D: potential(r.id, x), ll: pointAt(r.id, x) });
+    }
+  });
+
+  function weightedQuantile(vals, ws, q) {
+    const idx = vals.map((v, i) => i).sort((a, b) => vals[a] - vals[b]);
+    const tot = ws.reduce((a, b) => a + b, 0);
+    let c = 0;
+    for (const i of idx) { c += ws[i]; if (c >= q * tot) return vals[i]; }
+    return vals[idx[idx.length - 1]];
+  }
+
+  function G(cand, rd) {
+    if (!isDownstream(cand, rd)) return null;
+    const tau = Math.pow(rd.q, -0.25) * (cand.D - rd.D) / 86400; // days
+    return { tau, n: Math.exp(-DECAY.n * tau) / rd.Q, p: Math.exp(-DECAY.p * tau) / rd.Q };
+  }
+
+  function prepare(readings, cond) {
+    return readings.map(r => {
+      const s = snap(r.lat, r.lng);
+      const q = qSpec(cond, r.takenAt);
+      const A = area(s.river, s.chain);
+      return { ...r, river: s.river, chain: s.chain, tidal: s.tidal, D: potential(s.river, s.chain), q, A, Q: A * q, t: new Date(r.takenAt).getTime() };
+    });
+  }
+
+  function analyze(readings, cond, opts = {}) {
+    const windowDays = opts.windowDays || 10;
+    const all = prepare(readings, cond);
+    const asOf = opts.asOf || (all.length ? Math.max(...all.map(r => r.t)) : Date.now());
+    const half = windowDays / 2;
+    const rs = all.filter(r => r.t <= asOf && r.t > asOf - windowDays * 864e5)
+      .map(r => ({ ...r, w: Math.pow(0.5, (asOf - r.t) / 864e5 / half) }));
+    const bg = {};
+    ['n', 'p'].forEach(n => {
+      const key = n === 'n' ? 'nitrate' : 'phosphate';
+      const have = rs.filter(r => isFinite(r[key]));
+      const override = cond && cond.background && +cond.background[key];
+      bg[n] = override > 0 ? override : (have.length >= 3 ? weightedQuantile(have.map(r => r[key]), have.map(r => r.w), 0.2) : (n === 'n' ? 3.0 : 0.04));
+    });
+    // per-reading obs
+    const obs = rs.map(r => ({
+      r,
+      n: isFinite(r.nitrate) ? { y: r.nitrate - bg.n, s: sigma('n', r.nitrate, r.tidal) } : null,
+      p: isFinite(r.phosphate) ? { y: r.phosphate - bg.p, s: sigma('p', r.phosphate, r.tidal) } : null,
+    }));
+    const Gm = CANDS.map(c => obs.map(o => G(c, o.r)));
+
+    // candidate onset times: before the window, or the start of any day with a reading
+    const onsets = [-Infinity, ...[...new Set(rs.map(r => Math.floor(r.t / 864e5) * 864e5))].sort((a, b) => a - b)];
+    const sources = [];
+    const combined = new Float64Array(CANDS.length);
+    for (let round = 0; round < 3 && obs.length; round++) {
+      const nO = onsets.length;
+      const gains = new Float64Array(CANDS.length * nO);
+      const loads = new Array(CANDS.length * nO);
+      CANDS.forEach((c, j) => {
+        onsets.forEach((on, k) => {
+          let gain = 0; const L = {};
+          ['n', 'p'].forEach(n => {
+            let num = 0, den = 0;
+            obs.forEach((o, i) => {
+              const g = Gm[j][i]; if (!g || !o[n]) return;
+              if (o.r.t - g.tau * 864e5 < on) return; // water sampled had passed the site before onset
+              const w = o.r.w / (o[n].s * o[n].s);
+              num += w * g[n] * o[n].y; den += w * g[n] * g[n];
+            });
+            L[n] = den > 0 ? Math.max(0, num / den) : 0;
+            gain += L[n] * num;
+          });
+          // small penalty per extra parameter (onset) so "always on" is preferred unless data demand it
+          if (k > 0) gain -= 2;
+          gains[j * nO + k] = gain; loads[j * nO + k] = L;
+        });
+      });
+      let ib = 0; for (let i = 1; i < gains.length; i++) if (gains[i] > gains[ib]) ib = i;
+      if (gains[ib] < 9) break;
+      const jb = Math.floor(ib / nO), kb = ib % nO;
+      const p = new Array(CANDS.length).fill(0);
+      for (let i = 0; i < gains.length; i++) p[Math.floor(i / nO)] += Math.exp((gains[i] - gains[ib]) / 2);
+      const Z = p.reduce((a, b) => a + b, 0);
+      for (let j = 0; j < p.length; j++) p[j] /= Z;
+      const order = p.map((v, j) => j).sort((a, b) => p[b] - p[a]);
+      const cred = []; let cum = 0;
+      for (const j of order) { cred.push(j); cum += p[j]; if (cum >= 0.8) break; }
+      let next = null, bestDiff = 2;
+      cred.forEach(c => {
+        let up = 0;
+        cred.forEach(j => { if (isDownstream(CANDS[j], CANDS[c])) up += p[j]; });
+        const diff = Math.abs(up / cum - 0.5);
+        if (diff < bestDiff) { bestDiff = diff; next = c; }
+      });
+      const rivers = [...new Set(cred.map(j => CANDS[j].river))];
+      const ext = rivers.map(rid => {
+        const xs = cred.filter(j => CANDS[j].river === rid).map(j => CANDS[j].chain);
+        return { river: rid, from: Math.min(...xs) - CAND_STEP / 2, to: Math.max(...xs) + CAND_STEP / 2 };
+      });
+      const Lb = loads[ib];
+      const best = CANDS[jb];
+      const qNow = qSpec(cond, asOf);
+      const Qs = area(best.river, best.chain) * qNow;
+      sources.push({
+        cand: best, prob: p, cred, credProb: cum, stretchKm: cred.length * CAND_STEP, extents: ext,
+        strength: gains[ib], next: CANDS[next], onset: onsets[kb],
+        load: { n: Lb.n, p: Lb.p },
+        kgday: { n: Lb.n * 86.4, p: Lb.p * 86.4 },
+        rise: { n: Lb.n / Qs, p: Lb.p / Qs },
+      });
+      const pmax = Math.max(...p);
+      for (let j = 0; j < CANDS.length; j++) combined[j] = Math.max(combined[j], p[j] / pmax);
+      obs.forEach((o, i) => {
+        const g = Gm[jb][i]; if (!g) return;
+        if (o.r.t - g.tau * 864e5 < onsets[kb]) return;
+        ['n', 'p'].forEach(n => { if (o[n]) o[n].y -= Lb[n] * g[n]; });
+      });
+    }
+    return { readings: rs, allPrepared: all, bg, sources, combined: Array.from(combined), asOf, windowDays, qNow: qSpec(cond, asOf), apiNow: apiOn(cond, asOf) };
+  }
+
+  function predict(rid, chain, date, sources, bg, cond) {
+    const q = qSpec(cond, date);
+    const A = area(rid, chain);
+    const rd = { river: rid, chain, D: potential(rid, chain), q, Q: A * q };
+    const out = { n: bg.n, p: bg.p };
+    sources.forEach(s => {
+      const g = G(s.cand, rd); if (!g) return;
+      if (s.onset > -Infinity && new Date(date).getTime() - g.tau * 864e5 < s.onset) return;
+      out.n += s.load.n * g.n; out.p += s.load.p * g.p;
+    });
+    return out;
+  }
+
+  return { RIVERS, TOWNS, CANDS, byId, proj, unproj, snap, pointAt, area, potential, qSpec, apiOn, analyze, predict, isDownstream, NANT_AREA, CAND_STEP, DECAY, SINUOSITY, G, prepare };
+})();
+if (typeof module !== 'undefined') module.exports = TywiModel;
+
+</script>
+<script>
+(() => {
+const M = TywiModel;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const RNAME = Object.fromEntries(M.RIVERS.map(r => [r.id, r.name]));
+const state = { readings: [], cond: null, res: null, nut: 'n', sel: null, pending: null, asOfUser: null, win: 10,
+  db: null, user: null, me: null, canWrite: null, canEdit: false, names: {}, dbReady: false };
+
+/* ---------- map geometry ---------- */
+const svg = $('map'), NS = 'http://www.w3.org/2000/svg';
+const S = 10; // svg units per km
+const allXY = M.RIVERS.flatMap(r => r.xy);
+const bx = { x0: Math.min(...allXY.map(p => p[0])) - 6, x1: Math.max(...allXY.map(p => p[0])) + 6,
+             y0: Math.min(...allXY.map(p => p[1])) - 4, y1: Math.max(...allXY.map(p => p[1])) + 4 };
+const home = { x: bx.x0 * S, y: bx.y0 * S, w: (bx.x1 - bx.x0) * S, h: (bx.y1 - bx.y0) * S };
+let vb = { ...home };
+const setVB = () => svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+setVB();
+svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+const ll2s = (lat, lng) => { const [x, y] = M.proj(lat, lng); return [x * S, y * S]; };
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+const gRivers = el('g', {}, svg), gHeat = el('g', {}, svg), gTowns = el('g', {}, svg), gMarks = el('g', {}, svg);
+function drawBase() {
+  gRivers.innerHTML = ''; gTowns.innerHTML = '';
+  M.RIVERS.forEach(r => {
+    // draw in short pieces so width can grow with drainage area
+    const steps = Math.ceil(r.length / 1);
+    for (let i = 0; i < steps; i++) {
+      const a = Math.min(i, r.length), b = Math.min(i + 1, r.length);
+      const p1 = ll2s(...M.pointAt(r.id, a)), p2 = ll2s(...M.pointAt(r.id, b));
+      const w = 1.2 + Math.sqrt(M.area(r.id, (a + b) / 2)) * 0.22;
+      el('line', { x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1], stroke: 'var(--river)', 'stroke-width': w, 'stroke-linecap': 'round', 'vector-effect': 'none' }, gRivers);
+    }
+    const LAB = { tywi: [6, -78, 0], bran: [0.5, 8, -8], sawdde: [0.6, 10, 14], cothi: [0.3, 14, 4], gwili: [0.3, -88, 0] }[r.id];
+    const lab = ll2s(...M.pointAt(r.id, r.parent ? r.length * LAB[0] : LAB[0]));
+    const t = el('text', { x: lab[0] + LAB[1], y: lab[1] + LAB[2], class: 'halo', 'font-family': 'var(--serif)', 'font-style': 'italic', 'font-size': 15, fill: 'var(--river)' }, gRivers);
+    t.textContent = 'Afon ' + r.name;
+  });
+  M.TOWNS.forEach(([n, lat, lng]) => {
+    const [x, y] = ll2s(lat, lng);
+    el('rect', { x: x - 2.5, y: y - 2.5, width: 5, height: 5, fill: 'var(--ink)', opacity: .7 }, gTowns);
+    const off = { Carmarthen: [-74, 16], 'Llyn Brianne': [-84, 4], Pumsaint: [-62, -2], Dryslwyn: [-20, 18], Nantgaredig: [-40, -8], Llandeilo: [6, 16] }[n] || [6, -5];
+    const t = el('text', { x: x + off[0], y: y + off[1], 'font-size': 12, fill: 'var(--muted)', 'font-family': 'var(--sans)', class: 'halo' }, gTowns);
+    t.textContent = n;
+  });
+  const sea = ll2s(51.735, -4.43);
+  const t = el('text', { x: sea[0], y: sea[1], 'font-size': 13, fill: 'var(--muted)', 'font-style': 'italic', 'font-family': 'var(--serif)' }, gTowns);
+  t.textContent = 'Carmarthen Bay';
+}
+drawBase();
+
+function zScore(r, bg) {
+  let z = 0;
+  if (isFinite(r.nitrate)) z = Math.max(z, (r.nitrate - bg.n) / (0.4 + 0.15 * r.nitrate));
+  if (isFinite(r.phosphate)) z = Math.max(z, (r.phosphate - bg.p) / (0.025 + 0.2 * r.phosphate));
+  return z;
+}
+const zColor = z => z < 1 ? 'var(--moss)' : z < 3 ? 'var(--peat)' : 'var(--slurry)';
+
+function drawOverlay() {
+  gHeat.innerHTML = ''; gMarks.innerHTML = '';
+  const res = state.res;
+  if (res) {
+    const dens = new Float64Array(M.CANDS.length);
+    res.sources.forEach(s => s.prob.forEach((p, j) => { dens[j] = Math.max(dens[j], Math.min(1, p / 0.06)); }));
+    dens.forEach((v, j) => {
+      if (v < 0.04) return;
+      const c = M.CANDS[j];
+      const p1 = ll2s(...M.pointAt(c.river, c.chain - M.CAND_STEP / 2)), p2 = ll2s(...M.pointAt(c.river, c.chain + M.CAND_STEP / 2));
+      el('line', { x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1], stroke: v > 0.5 ? 'var(--slurry)' : 'var(--peat)', 'stroke-width': 14, 'stroke-linecap': 'round', opacity: (0.15 + 0.75 * v).toFixed(2) }, gHeat);
+    });
+    res.sources.forEach(s => {
+      const [x, y] = ll2s(...s.next.ll);
+      el('circle', { cx: x, cy: y, r: 11, fill: 'none', stroke: 'var(--river)', 'stroke-width': 3 }, gMarks);
+      el('circle', { cx: x, cy: y, r: 3, fill: 'var(--river)' }, gMarks);
+    });
+    const inWin = new Set(res.readings.map(r => r.id));
+    res.allPrepared.forEach(r => {
+      const [x, y] = ll2s(...M.pointAt(r.river, r.chain));
+      const active = inWin.has(r.id);
+      const c = el('circle', { cx: x, cy: y, r: state.sel === r.id ? 8 : 5.5, fill: active ? zColor(zScore(r, res.bg)) : 'var(--card)', stroke: state.sel === r.id ? 'var(--ink)' : 'var(--card)', 'stroke-width': state.sel === r.id ? 2.5 : 1.5, opacity: active ? 1 : .55, style: 'cursor:pointer' }, gMarks);
+      if (!active) c.setAttribute('stroke', 'var(--muted)');
+      c.dataset.id = r.id;
+      const tt = el('title', {}, c);
+      tt.textContent = `${RNAME[r.river]} ${r.chain.toFixed(1)} km · ${fmtDate(r.takenAt)} · nitrate ${fmtV(r.nitrate, 1)} · phosphate ${fmtV(r.phosphate, 3)}`;
+    });
+  }
+  if (state.pending) {
+    const [x, y] = ll2s(state.pending.lat, state.pending.lng);
+    el('path', { d: `M${x} ${y} l-7 -16 a8 8 0 1 1 14 0 z`, fill: 'var(--ink)' }, gMarks);
+    el('circle', { cx: x, cy: y - 19, r: 3, fill: 'var(--paper)' }, gMarks);
+  }
+}
+
+/* pan, zoom, click */
+function svgPoint(evt) {
+  const pt = svg.createSVGPoint(); pt.x = evt.clientX; pt.y = evt.clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+function zoom(f, cx, cy) {
+  if (cx == null) { cx = vb.x + vb.w / 2; cy = vb.y + vb.h / 2; }
+  const nw = Math.min(home.w * 1.2, Math.max(home.w / 12, vb.w * f));
+  const k = nw / vb.w;
+  vb = { x: cx - (cx - vb.x) * k, y: cy - (cy - vb.y) * k, w: vb.w * k, h: vb.h * k };
+  setVB();
+}
+$('zin').onclick = () => zoom(0.7); $('zout').onclick = () => zoom(1 / 0.7); $('zreset').onclick = () => { vb = { ...home }; setVB(); };
+svg.addEventListener('wheel', e => { e.preventDefault(); const p = svgPoint(e); zoom(e.deltaY > 0 ? 1.15 : 0.87, p.x, p.y); }, { passive: false });
+const pointers = new Map(); let drag = null, pinch = null;
+svg.addEventListener('pointerdown', e => {
+  svg.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 1) drag = { sx: e.clientX, sy: e.clientY, vb: { ...vb }, moved: false, target: e.target };
+  if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), vb: { ...vb } }; drag = null; }
+});
+svg.addEventListener('pointermove', e => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const r = svg.getBoundingClientRect();
+  const scale = Math.max(vb.w / r.width, vb.h / r.height);
+  if (pinch && pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    vb = { ...pinch.vb }; zoom(pinch.d / d);
+  } else if (drag) {
+    const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+    if (Math.hypot(dx, dy) > 4) drag.moved = true;
+    if (drag.moved) { vb = { ...drag.vb, x: drag.vb.x - dx * scale, y: drag.vb.y - dy * scale }; setVB(); }
+  }
+});
+const endPointer = e => {
+  const d = drag;
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinch = null;
+  if (d && !d.moved && e.type === 'pointerup') {
+    const id = d.target && d.target.dataset && d.target.dataset.id;
+    if (id) { selectReading(id); return; }
+    const p = svgPoint(e);
+    const [lat, lng] = M.unproj(p.x / S, p.y / S);
+    setPending(lat, lng, true);
+  }
+  drag = null;
+};
+svg.addEventListener('pointerup', endPointer);
+svg.addEventListener('pointercancel', endPointer);
+
+let hintT;
+function hint(msg) { const h = $('hint'); h.textContent = msg; h.classList.add('show'); clearTimeout(hintT); hintT = setTimeout(() => h.classList.remove('show'), 2600); }
+
+/* ---------- formatting ---------- */
+const fmtV = (v, d) => isFinite(v) ? (+v).toFixed(d) : '–';
+function fmtDate(t) { const d = new Date(t); return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); }
+const fmtDay = t => new Date(t).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+function nearestTown(lat, lng) {
+  let best = null;
+  M.TOWNS.forEach(([n, a, b]) => { const d = Math.hypot((a - lat) * 110.6, (b - lng) * 68.7); if (!best || d < best.d) best = { n, d }; });
+  return best;
+}
+function placeDesc(rid, chain) {
+  const [lat, lng] = M.pointAt(rid, chain);
+  const t = nearestTown(lat, lng);
+  return t.d < 1.5 ? `at ${t.n}` : `about ${t.d.toFixed(0)} km from ${t.n}`;
+}
+function between(rid, a, b) {
+  const t1 = nearestTown(...M.pointAt(rid, a)), t2 = nearestTown(...M.pointAt(rid, b));
+  return t1.n === t2.n ? `near ${t1.n}` : `between ${t1.n} and ${t2.n}`;
+}
+
+/* ---------- analysis & sources pane ---------- */
+let recomputeT;
+function recompute() { clearTimeout(recomputeT); recomputeT = setTimeout(doRecompute, 60); }
+function doRecompute() {
+  const asOf = state.asOfUser ? new Date(state.asOfUser + 'T23:59:59').getTime() : undefined;
+  state.res = M.analyze(state.readings, state.cond, { windowDays: state.win, asOf });
+  if (!state.asOfUser && state.readings.length) $('asof').value = new Date(state.res.asOf).toISOString().slice(0, 10);
+  drawOverlay(); renderSources(); renderProfile(); renderList(); renderCond();
+}
+
+function renderSources() {
+  const out = $('sourcesOut'), res = state.res;
+  if (!state.readings.length) { out.innerHTML = '<p class="small">No readings yet. Log the first one from the "Log reading" tab, or load the demo readings to see how the tracer works.</p>' + demoButton(); wireDemo(); return; }
+  const n = res.readings.length;
+  let h = `<p class="small">${n} reading${n === 1 ? '' : 's'} in the ${res.windowDays} days up to ${fmtDay(res.asOf)}. Background taken as ${res.bg.n.toFixed(1)} mg/L nitrate and ${res.bg.p.toFixed(3)} mg/L phosphate.</p>`;
+  if (!res.sources.length) {
+    h += `<div class="msg ok">No stretch of river stands out. The readings fit a river at background levels within test-kit error.</div>`;
+  }
+  res.sources.forEach((s, i) => {
+    const level = s.strength >= 25 ? 'strong' : s.strength >= 14 ? 'moderate' : 'weak';
+    const exts = s.extents.sort((a, b) => b.to - b.from - (a.to - a.from));
+    const main = exts[0];
+    const others = exts.slice(1).map(e => `${RNAME[e.river]} ${e.from.toFixed(0)}–${e.to.toFixed(0)} km`);
+    const onset = s.onset > -Infinity ? `around ${fmtDay(s.onset)}` : `before ${fmtDay(res.asOf - res.windowDays * 864e5)} (start of window)`;
+    h += `<div class="source">
+      <h3>${i + 1 === 1 ? 'Most likely' : 'Also likely'}: Afon ${esc(RNAME[main.river])} <span class="badge ${level}">${level} evidence</span></h3>
+      <dl>
+        <dt>Stretch</dt><dd>${main.from.toFixed(1)}–${main.to.toFixed(1)} km from source, ${esc(between(main.river, main.from, main.to))}</dd>
+        ${others.length ? `<dt>Or</dt><dd>${esc(others.join('; '))} (no readings there to rule it out)</dd>` : ''}
+        <dt>Confidence</dt><dd>${Math.round(s.credProb * 100)}% chance the entry is in the highlighted ${s.stretchKm.toFixed(1)} km</dd>
+        <dt>Started</dt><dd>${onset}</dd>
+        <dt>Added load</dt><dd>≈ ${Math.round(s.kgday.n)} kg nitrate and ${s.kgday.p.toFixed(0)} kg phosphate a day</dd>
+        <dt>Effect</dt><dd>+${s.rise.n.toFixed(1)} mg/L nitrate, +${s.rise.p.toFixed(3)} mg/L phosphate just below it at current flow</dd>
+        <dt>Score</dt><dd>${s.strength.toFixed(1)} (flagged above 9)</dd>
+      </dl>
+      <div class="next"><strong>Best next test site:</strong> ${esc(RNAME[s.next.river])}, ${s.next.chain.toFixed(1)} km from source, ${esc(placeDesc(s.next.river, s.next.chain))} (${s.next.ll[0].toFixed(4)}, ${s.next.ll[1].toFixed(4)}). A reading here shows whether the entry is above or below it.
+        <div style="margin-top:6px"><button class="btn ghost" data-next="${i}" type="button">Log a reading here</button></div>
+      </div>
+    </div>`;
+  });
+  out.innerHTML = h;
+  out.querySelectorAll('[data-next]').forEach(b => b.onclick = () => {
+    const s = res.sources[+b.dataset.next];
+    setPending(s.next.ll[0], s.next.ll[1], true);
+  });
+}
+$('win').oninput = e => { state.win = +e.target.value; $('winv').textContent = state.win; recompute(); };
+$('asof').onchange = e => { state.asOfUser = e.target.value || null; recompute(); };
+
+/* ---------- profile chart ---------- */
+document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
+  state.nut = b.dataset.nut;
+  document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  renderProfile();
+});
+function renderProfile() {
+  const p = $('profile'); p.innerHTML = '';
+  const res = state.res; if (!res) return;
+  const W = p.clientWidth || 600, H = 210, L = 46, R = 10, T = 10, B = 28;
+  p.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const tywi = M.byId.tywi, nut = state.nut, key = nut === 'n' ? 'nitrate' : 'phosphate';
+  const line = [];
+  for (let x = 0.25; x < tywi.length; x += 0.5) line.push([x, M.predict('tywi', x, res.asOf, res.sources, res.bg, state.cond)[nut]]);
+  const pts = res.readings.filter(r => r.river === 'tywi' && isFinite(r[key]));
+  const ymax = Math.max(...line.map(l => l[1]), ...pts.map(r => r[key]), res.bg[nut] * 2) * 1.1;
+  const sx = x => L + x / tywi.length * (W - L - R), sy = y => H - B - y / ymax * (H - T - B);
+  // stretches
+  res.sources.forEach(s => s.extents.filter(e => e.river === 'tywi').forEach(e => el('rect', { x: sx(e.from), y: T, width: Math.max(2, sx(e.to) - sx(e.from)), height: H - T - B, fill: 'var(--peat)', opacity: .18 }, p)));
+  // axes
+  el('line', { x1: L, y1: H - B, x2: W - R, y2: H - B, stroke: 'var(--line)' }, p);
+  for (let k = 0; k <= 4; k++) {
+    const v = ymax / 1.1 * k / 4, y = sy(v);
+    el('line', { x1: L, y1: y, x2: W - R, y2: y, stroke: 'var(--line)', 'stroke-dasharray': '2 4' }, p);
+    const t = el('text', { x: L - 6, y: y + 4, 'text-anchor': 'end', 'font-size': 11, fill: 'var(--muted)' }, p); t.textContent = v.toFixed(nut === 'n' ? 1 : 2);
+  }
+  for (let x = 0; x <= tywi.length; x += 20) { const t = el('text', { x: sx(x), y: H - 8, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--muted)' }, p); t.textContent = x + ' km'; }
+  tywi.children.forEach(c => {
+    el('line', { x1: sx(c.conf), y1: T, x2: sx(c.conf), y2: H - B, stroke: 'var(--river)', 'stroke-width': 1, opacity: .5 }, p);
+    const t = el('text', { x: sx(c.conf) + 3, y: T + 11, 'font-size': 11, fill: 'var(--river)', 'font-style': 'italic', 'font-family': 'var(--serif)' }, p); t.textContent = c.name;
+  });
+  el('line', { x1: L, y1: sy(res.bg[nut]), x2: W - R, y2: sy(res.bg[nut]), stroke: 'var(--moss)', 'stroke-dasharray': '5 4' }, p);
+  el('path', { d: 'M' + line.map(l => `${sx(l[0]).toFixed(1)} ${sy(l[1]).toFixed(1)}`).join(' L'), fill: 'none', stroke: 'var(--ink)', 'stroke-width': 1.8 }, p);
+  pts.forEach(r => {
+    const c = el('circle', { cx: sx(r.chain), cy: sy(r[key]), r: 4, fill: zColor(zScore(r, res.bg)), opacity: (0.35 + 0.65 * r.w).toFixed(2) }, p);
+    el('title', {}, c).textContent = `${fmtDate(r.takenAt)}: ${r[key]} mg/L`;
+  });
+
+}
+window.addEventListener('resize', () => renderProfile());
+
+/* ---------- tabs ---------- */
+function showTab(name) {
+  document.querySelectorAll('[role=tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === name));
+  document.querySelectorAll('[data-pane]').forEach(p => p.classList.toggle('hidden', p.dataset.pane !== name));
+}
+document.querySelectorAll('[role=tab]').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+/* ---------- logging ---------- */
+function localNow() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }
+$('when').value = localNow();
+function setPending(lat, lng, fromUI) {
+  const s = M.snap(lat, lng);
+  if (s.dist > 1.0) {
+    state.pending = null;
+    $('locOut').className = 'msg err';
+    $('locOut').textContent = `That point is ${s.dist.toFixed(1)} km from the nearest mapped river. Tap on a river line, or check the coordinates.`;
+    if (fromUI) hint('Tap on a river line');
+    drawOverlay(); return;
+  }
+  state.pending = { lat: s.lat, lng: s.lng, rawLat: lat, rawLng: lng, river: s.river, chain: s.chain, dist: s.dist, tidal: s.tidal };
+  $('lat').value = lat.toFixed(5); $('lng').value = lng.toFixed(5);
+  $('locOut').className = 'msg ok';
+  $('locOut').textContent = `Afon ${RNAME[s.river]}, ${s.chain.toFixed(1)} km from source, ${placeDesc(s.river, s.chain)}${s.dist > 0.05 ? ` (${Math.round(s.dist * 1000)} m from the mapped line)` : ''}${s.tidal ? '. Tidal water: this reading will carry more uncertainty.' : ''}`;
+  if (fromUI) showTab('log');
+  drawOverlay();
+}
+$('checkLoc').onclick = () => {
+  const lat = parseFloat($('lat').value), lng = parseFloat($('lng').value);
+  if (!isFinite(lat) || !isFinite(lng)) { $('locOut').className = 'msg err'; $('locOut').textContent = 'Enter latitude and longitude as decimal numbers, e.g. 51.884 and -3.988.'; return; }
+  setPending(lat, lng, false);
+};
+$('useLoc').onclick = () => {
+  if (!navigator.geolocation) { $('locOut').className = 'msg err'; $('locOut').textContent = 'This browser can\'t share location. Tap the map instead.'; return; }
+  $('locOut').className = 'msg'; $('locOut').textContent = 'Finding your location…';
+  navigator.geolocation.getCurrentPosition(
+    p => setPending(p.coords.latitude, p.coords.longitude, false),
+    () => { $('locOut').className = 'msg err'; $('locOut').textContent = 'Location isn\'t available here. Tap the river on the map instead.'; },
+    { enableHighAccuracy: true, timeout: 10000 });
+};
+$('save').onclick = async () => {
+  const msg = $('saveMsg');
+  const say = (t, cls) => { msg.innerHTML = `<div class="msg ${cls || ''}">${esc(t)}</div>`; };
+  if (!state.db) return say('The reading store isn\'t connected. Check your internet connection and reload the page.', 'err');
+  if (state.canWrite === false) return say('You can view readings but not add them. Ask the page owner to give you Contributor access.', 'err');
+  if (!state.pending) return say('Choose where the sample was taken first.', 'err');
+  const nit = $('nit').value === '' ? NaN : parseFloat($('nit').value);
+  const pho = $('pho').value === '' ? NaN : parseFloat($('pho').value);
+  if (!isFinite(nit) && !isFinite(pho)) return say('Enter a nitrate or phosphate value (or both).', 'err');
+  if ((isFinite(nit) && (nit < 0 || nit > 200)) || (isFinite(pho) && (pho < 0 || pho > 20))) return say('That value is outside what a river test kit reads. Check the units: nitrate in mg/L NO₃, phosphate in mg/L PO₄.', 'err');
+  const when = new Date($('when').value);
+  if (isNaN(when)) return say('Enter the date and time of the sample.', 'err');
+  if (when.getTime() > Date.now() + 36e5) return say('The sample time is in the future. Check the date.', 'err');
+  const doc = { lat: +state.pending.rawLat.toFixed(5), lng: +state.pending.rawLng.toFixed(5), takenAt: when.toISOString(), createdAt: new Date().toISOString(), demo: false, by: state.me || 'unknown' };
+  const who = $('who').value.trim(); if (who) { doc.name = who.slice(0, 40); try { localStorage.setItem('tywi-name', doc.name); } catch (e) {} }
+  if (isFinite(nit)) doc.nitrate = nit;
+  if (isFinite(pho)) doc.phosphate = pho;
+  const note = $('note').value.trim(); if (note) doc.note = note.slice(0, 300);
+  $('save').disabled = true;
+  try {
+    await state.db.collection('readings').add(doc);
+    say('Saved. The analysis has been updated.', 'ok');
+    $('nit').value = ''; $('pho').value = ''; $('note').value = ''; $('when').value = localNow();
+    state.pending = null; $('locOut').className = 'msg'; $('locOut').textContent = 'No location yet.';
+  } catch (e) {
+    if (e && e.code === 'permission-denied') say('The database refused this reading. Its security rules may have expired: the page owner needs to update them in Firebase.', 'err');
+    else if (e && e.code === 'resource-exhausted') say('The free daily limit has been reached. Try again tomorrow.', 'err');
+    else say('The reading didn\'t save. Check your connection and try again.', 'err');
+  } finally { $('save').disabled = false; }
+};
+
+/* ---------- readings list ---------- */
+function selectReading(id) {
+  state.sel = id; drawOverlay(); renderList(); showTab('readings');
+  const li = document.querySelector(`#rlist li[data-id="${CSS.escape(id)}"]`); if (li) li.scrollIntoView({ block: 'nearest' });
+}
+function renderList() {
+  const ul = $('rlist'), res = state.res;
+  const demoCount = state.readings.filter(r => r.demo).length;
+  $('demoBar').innerHTML = demoCount ? `<div class="msg">${demoCount} demo readings are showing. They're simulated (two hidden pollution sources) so you can see how the tracer works. <div style="margin-top:6px"><button class="btn ghost" id="clearDemo" type="button">Remove demo readings</button></div></div>` : '';
+  const cd = $('clearDemo');
+  if (cd) cd.onclick = async () => {
+    if (!confirm('Remove all demo readings? Real readings stay.')) return;
+    cd.disabled = true;
+    for (const r of state.readings.filter(r => r.demo)) { try { await state.db.doc('readings/' + r.id).delete(); } catch (e) { break; } }
+  };
+  if (!res || !res.allPrepared.length) { ul.innerHTML = '<li class="small">No readings yet.</li>' + demoButton(); wireDemo(); return; }
+  const list = [...res.allPrepared].sort((a, b) => b.t - a.t);
+  ul.innerHTML = list.map(r => {
+    const who = r.demo ? 'Demo data' : (r.name || 'Someone');
+    const canDel = state.db && !r.demo && (r.by === state.me || state.canEdit);
+    return `<li data-id="${esc(r.id)}" class="${state.sel === r.id ? 'sel' : ''}">
+      <span><span class="chip" style="background:${zColor(zScore(r, res.bg))}"></span><strong>${esc(RNAME[r.river])} ${r.chain.toFixed(1)} km</strong> · ${esc(fmtDate(r.takenAt))}</span>
+      <span class="vals">N ${fmtV(r.nitrate, 1)} · P ${fmtV(r.phosphate, 3)}</span>
+      <span class="small">${esc(who)}${r.note ? ' · ' + esc(r.note) : ''}</span>
+      <span>${canDel ? `<button class="del" data-del="${esc(r.id)}" type="button">Delete</button>` : ''}</span>
+    </li>`;
+  }).join('');
+  ul.querySelectorAll('li[data-id]').forEach(li => li.onclick = e => { if (e.target.dataset.del) return; state.sel = li.dataset.id; drawOverlay(); renderList(); });
+  ul.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+    if (!confirm('Delete this reading?')) return;
+    try { await state.db.doc('readings/' + b.dataset.del).delete(); } catch (e) { alert('That reading couldn\'t be deleted.'); }
+  });
+}
+
+/* ---------- rain & flow ---------- */
+function renderCond() {
+  const res = state.res, cond = state.cond || {};
+  const end = res ? res.asOf : Date.now();
+  const rain = {}; (cond.days || []).forEach(d => rain[d.date] = +d.rain_mm);
+  const days = []; for (let i = 13; i >= 0; i--) { const ds = new Date(end - i * 864e5).toISOString().slice(0, 10); days.push([ds, rain[ds]]); }
+  const c = $('rainchart'); c.innerHTML = '';
+  const W = c.clientWidth || 340, H = 150, B = 22, T = 14;
+  c.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const mx = Math.max(10, ...days.map(d => d[1] || 0));
+  const bw = W / days.length;
+  days.forEach(([ds, v], i) => {
+    const x = i * bw;
+    if (v == null) {
+      const t = el('text', { x: x + bw / 2, y: H - B - 4, 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--muted)' }, c); t.textContent = '?';
+    } else {
+      const h = v / mx * (H - B - T);
+      el('rect', { x: x + 2, y: H - B - h, width: bw - 4, height: Math.max(h, 1), fill: 'var(--river)', rx: 1 }, c);
+      if (v >= 1) { const t = el('text', { x: x + bw / 2, y: H - B - h - 3, 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--muted)' }, c); t.textContent = v.toFixed(0); }
+    }
+    if (i % 2 === 0) { const t = el('text', { x: x + bw / 2, y: H - 6, 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--muted)' }, c); t.textContent = new Date(ds).getDate(); }
+  });
+  const missing = days.filter(d => d[1] == null).length;
+  const q = M.qSpec(cond, end), api = M.apiOn(cond, end);
+  $('flowOut').innerHTML = `
+    <dt>Rain index (API)</dt><dd>${api.toFixed(1)} mm${missing ? ` · ${missing} day${missing > 1 ? 's' : ''} missing, counted as dry` : ''}</dd>
+    <dt>Flow at Nantgaredig</dt><dd>≈ ${(q * M.NANT_AREA).toFixed(0)} m³/s ${(cond.gauge || []).some(g => g.date === new Date(end).toISOString().slice(0, 10)) ? '(gauged)' : '(estimated from rain)'}</dd>
+    <dt>Travel time</dt><dd>Llandovery to Carmarthen ≈ ${(Math.pow(q, -0.25) * (M.potential('tywi', 37) - M.potential('tywi', 88)) / 3600).toFixed(0)} hours</dd>
+    <dt>Rain data</dt><dd>${state.rainAuto ? 'Open-Meteo, fetched ' + esc(fmtDate(state.rainFetched)) : 'Couldn\'t reach Open-Meteo; using entered values only'}</dd>`;
+  renderCondEdit();
+}
+let condEditDrawn = false;
+function renderCondEdit() {
+  const box = $('condEdit');
+  if (!state.canEdit || !state.db) {
+    box.innerHTML = '<p class="small">Rainfall updates automatically from Open-Meteo (which includes Met Office models) every time the page opens. Gauged flows can be added by an editor.</p>';
+    condEditDrawn = false; return;
+  }
+  if (condEditDrawn) return;
+  condEditDrawn = true;
+  const today = new Date().toISOString().slice(0, 10);
+  box.innerHTML = `
+    <h2 style="margin-top:14px">Update rain and flow</h2>
+    <p class="small">Rainfall fills in automatically. Anything you enter here overrides it for that day. Add the mean flow at the Nantgaredig gauge (Natural Resources Wales river levels) when you have it.</p>
+    <div class="row2 field"><div><label for="cDate">Date</label><input type="date" id="cDate" value="${today}"></div>
+    <div><label for="cRain">Rainfall (mm)</label><input type="number" id="cRain" step="0.1" min="0"></div></div>
+    <div class="field"><label for="cFlow">Gauged flow at Nantgaredig (m³/s, optional)</label><input type="number" id="cFlow" step="0.1" min="0"></div>
+    <div class="row2 field"><div><label for="cBgN">Background nitrate (blank = auto)</label><input type="number" id="cBgN" step="0.1" min="0" value="${state.condDb && state.condDb.background && state.condDb.background.nitrate || ''}"></div>
+    <div><label for="cBgP">Background phosphate (blank = auto)</label><input type="number" id="cBgP" step="0.001" min="0" value="${state.condDb && state.condDb.background && state.condDb.background.phosphate || ''}"></div></div>
+    <button class="btn" id="cSave" type="button">Save rain and flow</button><div id="cMsg"></div>`;
+  $('cSave').onclick = async () => {
+    const say = (t, cls) => $('cMsg').innerHTML = `<div class="msg ${cls}">${esc(t)}</div>`;
+    const date = $('cDate').value, rain = $('cRain').value, flow = $('cFlow').value;
+    if (!date) return say('Choose a date.', 'err');
+    const cur = state.condDb ? JSON.parse(JSON.stringify(state.condDb)) : {};
+    cur.days = (cur.days || []).filter(d => d.date !== date || rain === '');
+    if (rain !== '') cur.days.push({ date, rain_mm: +rain });
+    cur.days.sort((a, b) => a.date < b.date ? -1 : 1);
+    cur.days = cur.days.slice(-60);
+    cur.gauge = (cur.gauge || []).filter(g => g.date !== date || flow === '');
+    if (flow !== '') cur.gauge.push({ date, m3s: +flow });
+    cur.gauge = cur.gauge.slice(-60);
+    cur.background = { nitrate: $('cBgN').value === '' ? null : +$('cBgN').value, phosphate: $('cBgP').value === '' ? null : +$('cBgP').value };
+    cur.updatedAt = new Date().toISOString(); cur.source = 'Entered by an editor';
+    try { await state.db.doc('conditions/current').set(cur); say('Saved. Flows and the analysis have been updated.', 'ok'); $('cRain').value = ''; $('cFlow').value = ''; }
+    catch (e) { say('That didn\'t save. Check your connection and try again.', 'err'); }
+  };
+}
+
+/* ---------- data connection ---------- */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDExYXUQoOVscdznpao2EeGwwzWR28jgfI",
+  authDomain: "tywi-tracer.firebaseapp.com",
+  projectId: "tywi-tracer",
+  storageBucket: "tywi-tracer.firebasestorage.app",
+  messagingSenderId: "74331176754",
+  appId: "1:74331176754:web:7949783ae2d3307662212b"
+};
+const DEMO = [{"lat": 51.90765, "lng": -3.81078, "takenAt": "2026-09-28T10:43:00Z", "nitrate": 2.7, "demo": true, "by": "demo", "phosphate": 0.046}, {"lat": 51.9196, "lng": -4.12, "takenAt": "2026-09-28T14:28:00Z", "nitrate": 3, "demo": true, "by": "demo", "phosphate": 0.012}, {"lat": 51.86169, "lng": -4.14748, "takenAt": "2026-09-28T11:09:00Z", "nitrate": 5.1, "demo": true, "by": "demo", "phosphate": 0.291}, {"lat": 51.92484, "lng": -3.91944, "takenAt": "2026-09-29T08:21:00Z", "nitrate": 2.3, "demo": true, "by": "demo", "phosphate": 0.021}, {"lat": 52.0679, "lng": -3.92498, "takenAt": "2026-09-29T17:27:00Z", "nitrate": 2.8, "demo": true, "by": "demo", "phosphate": 0.028}, {"lat": 51.86732, "lng": -4.0651, "takenAt": "2026-09-29T11:47:00Z", "nitrate": 5.4, "demo": true, "by": "demo"}, {"lat": 51.86181, "lng": -4.23055, "takenAt": "2026-09-29T09:55:00Z", "nitrate": 4.1, "demo": true, "by": "demo", "phosphate": 0.14}, {"lat": 51.89553, "lng": -4.14533, "takenAt": "2026-09-30T14:14:00Z", "nitrate": 2.3, "demo": true, "by": "demo"}, {"lat": 51.90463, "lng": -3.8005, "takenAt": "2026-09-30T17:33:00Z", "nitrate": 3.3, "demo": true, "by": "demo"}, {"lat": 51.96069, "lng": -3.85211, "takenAt": "2026-09-30T09:41:00Z", "nitrate": 3.2, "demo": true, "by": "demo", "phosphate": 0.032}, {"lat": 51.89649, "lng": -3.96682, "takenAt": "2026-10-01T16:33:00Z", "nitrate": 2.9, "demo": true, "by": "demo", "phosphate": 0.067}, {"lat": 51.93359, "lng": -3.86996, "takenAt": "2026-10-01T09:38:00Z", "nitrate": 2.4, "demo": true, "by": "demo", "phosphate": 0.014}, {"lat": 52.03897, "lng": -3.96779, "takenAt": "2026-10-01T15:21:00Z", "nitrate": 3.1, "demo": true, "by": "demo"}, {"lat": 52.0065, "lng": -3.77907, "takenAt": "2026-10-01T17:54:00Z", "nitrate": 3.2, "demo": true, "by": "demo"}, {"lat": 52.10998, "lng": -3.76011, "takenAt": "2026-10-02T17:11:00Z", "nitrate": 3.6, "demo": true, "by": "demo", "phosphate": 0.031}, {"lat": 51.92892, "lng": -3.91293, "takenAt": "2026-10-02T17:09:00Z", "nitrate": 3.1, "demo": true, "by": "demo", "phosphate": 0.039}, {"lat": 51.95387, "lng": -4.30074, "takenAt": "2026-10-02T12:18:00Z", "nitrate": 4.4, "demo": true, "by": "demo", "phosphate": 0.05}, {"lat": 51.95815, "lng": -4.08015, "takenAt": "2026-10-03T11:24:00Z", "nitrate": 2.5, "demo": true, "by": "demo", "phosphate": 0.048}, {"lat": 51.85206, "lng": -4.30652, "takenAt": "2026-10-03T17:21:00Z", "nitrate": 3.4, "demo": true, "by": "demo"}, {"lat": 51.9289, "lng": -3.86039, "takenAt": "2026-10-03T14:42:00Z", "nitrate": 2.7, "demo": true, "by": "demo", "phosphate": 0.024}, {"lat": 51.87835, "lng": -4.00486, "takenAt": "2026-10-03T16:20:00Z", "nitrate": 3.8, "demo": true, "by": "demo", "phosphate": 0.048}, {"lat": 51.94877, "lng": -3.87686, "takenAt": "2026-10-03T17:41:00Z", "nitrate": 3.1, "demo": true, "by": "demo", "phosphate": 0.056}, {"lat": 52.02845, "lng": -3.97813, "takenAt": "2026-10-03T15:42:00Z", "nitrate": 2.9, "demo": true, "by": "demo", "phosphate": 0.056}, {"lat": 51.879, "lng": -4.00491, "takenAt": "2026-10-04T08:41:00Z", "nitrate": 4.4, "demo": true, "by": "demo", "phosphate": 0.108}, {"lat": 51.87477, "lng": -4.17045, "takenAt": "2026-10-04T16:11:00Z", "nitrate": 4.8, "demo": true, "by": "demo", "phosphate": 0.147}, {"lat": 51.95476, "lng": -3.8649, "takenAt": "2026-10-04T12:33:00Z", "nitrate": 3.6, "demo": true, "by": "demo", "phosphate": 0.018}, {"lat": 51.85707, "lng": -4.29763, "takenAt": "2026-10-04T11:36:00Z", "nitrate": 3.7, "demo": true, "by": "demo", "phosphate": 0.112}, {"lat": 52.05109, "lng": -3.94911, "takenAt": "2026-10-04T12:07:00Z", "nitrate": 3.1, "demo": true, "by": "demo", "phosphate": 0.063}, {"lat": 52.0837, "lng": -3.76937, "takenAt": "2026-10-04T11:24:00Z", "nitrate": 2.6, "demo": true, "by": "demo", "phosphate": 0.086}, {"lat": 51.93031, "lng": -3.85991, "takenAt": "2026-10-05T11:27:00Z", "nitrate": 2.7, "demo": true, "by": "demo", "phosphate": 0.046}, {"lat": 51.97218, "lng": -4.06597, "takenAt": "2026-10-05T15:19:00Z", "nitrate": 2.8, "demo": true, "by": "demo"}, {"lat": 52.11426, "lng": -3.75874, "takenAt": "2026-10-05T16:37:00Z", "nitrate": 2.7, "demo": true, "by": "demo", "phosphate": 0.02}, {"lat": 51.88408, "lng": -3.98849, "takenAt": "2026-10-06T15:17:00Z", "nitrate": 3.2, "demo": true, "by": "demo"}, {"lat": 51.952, "lng": -3.87187, "takenAt": "2026-10-06T11:38:00Z", "nitrate": 3.3, "demo": true, "by": "demo"}, {"lat": 51.96681, "lng": -4.07118, "takenAt": "2026-10-06T12:05:00Z", "nitrate": 2.4, "demo": true, "by": "demo", "phosphate": 0.026}, {"lat": 51.85401, "lng": -4.30577, "takenAt": "2026-10-06T14:07:00Z", "nitrate": 3.6, "demo": true, "by": "demo", "phosphate": 0.085}, {"lat": 51.8929, "lng": -4.15048, "takenAt": "2026-10-07T10:32:00Z", "nitrate": 6.1, "demo": true, "by": "demo", "phosphate": 0.235}, {"lat": 51.95053, "lng": -4.08682, "takenAt": "2026-10-07T08:42:00Z", "nitrate": 2.6, "demo": true, "by": "demo", "phosphate": 0.019}, {"lat": 51.93271, "lng": -4.29979, "takenAt": "2026-10-07T15:56:00Z", "nitrate": 2.4, "demo": true, "by": "demo"}, {"lat": 51.88744, "lng": -3.98135, "takenAt": "2026-10-07T12:19:00Z", "nitrate": 3.8, "demo": true, "by": "demo", "phosphate": 0.089}, {"lat": 51.8556, "lng": -4.30467, "takenAt": "2026-10-07T17:38:00Z", "nitrate": 4.1, "demo": true, "by": "demo", "phosphate": 0.093}, {"lat": 51.97296, "lng": -3.83289, "takenAt": "2026-10-07T11:37:00Z", "nitrate": 3.4, "demo": true, "by": "demo", "phosphate": 0.06}];
+function setStatus(t) { $('status').textContent = t; }
+function mergeCond() {
+  const db = state.condDb || {};
+  const days = {};
+  (state.rainAuto || []).forEach(d => days[d.date] = d.rain_mm);
+  (db.days || []).forEach(d => days[d.date] = d.rain_mm);
+  state.cond = { days: Object.entries(days).map(([date, rain_mm]) => ({ date, rain_mm })), gauge: db.gauge || [], background: db.background || {} };
+}
+function demoButton() { return state.db ? '<div style="margin-top:10px"><button class="btn" id="loadDemo" type="button">Load demo readings</button></div>' : ''; }
+function wireDemo() {
+  const b = $('loadDemo'); if (!b) return;
+  b.onclick = async () => {
+    b.disabled = true; b.textContent = 'Loading…';
+    try {
+      const batch = state.db.batch();
+      DEMO.forEach((r, i) => batch.set(state.db.collection('readings').doc('demo-' + String(i).padStart(2, '0')), { ...r, createdAt: r.takenAt }));
+      await batch.commit();
+    } catch (e) { b.disabled = false; b.textContent = 'Load demo readings'; alert('The demo readings couldn\'t be saved. Check the database rules in Firebase.'); }
+  };
+}
+async function fetchRain() {
+  try {
+    const u = 'https://api.open-meteo.com/v1/forecast?latitude=51.95&longitude=-3.95&daily=precipitation_sum&past_days=92&forecast_days=1&timezone=Europe%2FLondon';
+    const r = await fetch(u); if (!r.ok) throw 0;
+    const j = await r.json();
+    state.rainAuto = j.daily.time.map((t, i) => ({ date: t, rain_mm: j.daily.precipitation_sum[i] })).filter(d => d.rain_mm != null);
+    state.rainFetched = Date.now();
+  } catch (e) { state.rainAuto = null; }
+  mergeCond(); recompute();
+}
+try { state.me = localStorage.getItem('tywi-id'); if (!state.me) { state.me = 'dev-' + Math.random().toString(36).slice(2, 12); localStorage.setItem('tywi-id', state.me); } $('who').value = localStorage.getItem('tywi-name') || ''; } catch (e) { state.me = 'dev-' + Math.random().toString(36).slice(2, 12); }
+state.canEdit = /editor/.test(location.hash);
+state.canWrite = true;
+mergeCond();
+doRecompute();
+fetchRain();
+try {
+  firebase.initializeApp(FIREBASE_CONFIG);
+  state.db = firebase.firestore();
+} catch (e) { state.db = null; }
+if (!state.db) {
+  setStatus('Not connected to the reading store');
+  $('logIntro').textContent = 'The reading store couldn\'t load. Check your connection and reload.';
+} else {
+  state.db.collection('readings').onSnapshot(snap => {
+    state.readings = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => isFinite(r.lat) && isFinite(r.lng) && r.takenAt);
+    setStatus(`${state.readings.length} readings · live`);
+    recompute();
+  }, e => setStatus(e && e.code === 'permission-denied' ? 'Database rules are blocking reads. Update the rules in Firebase.' : 'Readings stopped updating. Reload the page.'));
+  state.db.doc('conditions/current').onSnapshot(s => { state.condDb = s.exists ? s.data() : null; condEditDrawn = false; mergeCond(); recompute(); }, () => {});
+}
+})();
+</script>
+</body>
+</html>
