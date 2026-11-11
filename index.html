@@ -47,6 +47,12 @@ main{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(320px,400px);gap:
 .mapctl button{width:34px;height:34px;border:1px solid var(--line);background:var(--card);border-radius:4px;cursor:pointer;font-size:18px;line-height:1}
 .legend{position:absolute;left:10px;bottom:10px;background:color-mix(in srgb,var(--card) 88%,transparent);border:1px solid var(--line);border-radius:4px;padding:8px 10px;font-size:12px;line-height:1.7;max-width:230px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+.viewtog{position:absolute;left:10px;top:10px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.viewtog .seg{margin-left:0;background:var(--card)}
+.legend .heatbar{display:block;width:150px;height:8px;border-radius:4px;background:linear-gradient(90deg,var(--moss),var(--peat),var(--slurry));margin:3px 0 1px}
+.legend .heatlab{display:flex;justify-content:space-between;width:150px;font-size:11px;color:var(--muted)}
+.hotlist{margin:4px 0 0;padding-left:20px;font-size:14px}
+.hotlist li{margin:3px 0}
 .legend .bar{display:inline-block;width:60px;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--peat),var(--slurry));margin-right:6px;vertical-align:1px}
 .hint{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:var(--ink);color:var(--paper);font-size:13px;padding:5px 10px;border-radius:4px;pointer-events:none;opacity:0;transition:opacity .2s}
 .hint.show{opacity:.92}
@@ -118,8 +124,25 @@ svg text.halo{paint-order:stroke;stroke:var(--land);stroke-width:3px;stroke-line
         <button id="zout" aria-label="Zoom out">−</button>
         <button id="zreset" aria-label="Reset view" style="font-size:13px">⤢</button>
       </div>
+      <div class="viewtog">
+        <div class="seg" role="group" aria-label="Map view">
+          <button data-view="sources" aria-pressed="true">Likely sources</button>
+          <button data-view="heat" aria-pressed="false">Heat map</button>
+        </div>
+        <div class="seg hidden" id="heatNut" role="group" aria-label="Heat map nutrient">
+          <button data-hn="both" aria-pressed="true">Both</button>
+          <button data-hn="n" aria-pressed="false">Nitrate</button>
+          <button data-hn="p" aria-pressed="false">Phosphate</button>
+        </div>
+      </div>
       <div class="hint" id="hint"></div>
-      <div class="legend">
+      <div class="legend hidden" id="legendHeat">
+        <div><strong>Pollution level (model + readings)</strong></div>
+        <div><span class="heatbar"></span>
+        <span class="heatlab"><span>Background</span><span>2×</span><span>3×+</span></span></div>
+        <div><i style="background:var(--slurry)"></i>Readings, coloured as before</div>
+      </div>
+      <div class="legend" id="legendSrc">
         <div><i style="background:var(--moss)"></i>Reading near background</div>
         <div><i style="background:var(--peat)"></i>Raised</div>
         <div><i style="background:var(--slurry)"></i>Well above background</div>
@@ -151,7 +174,6 @@ svg text.halo{paint-order:stroke;stroke:var(--land);stroke-width:3px;stroke-line
     <div class="tabbody">
 
       <div data-pane="sources">
-        <div class="demoSlot"></div>
         <div class="controls">
           <div>
             <label for="asof">Analyse up to</label>
@@ -162,6 +184,7 @@ svg text.halo{paint-order:stroke;stroke:var(--land);stroke-width:3px;stroke-line
             <input type="range" id="win" min="3" max="30" value="10">
           </div>
         </div>
+        <div id="hotOut" class="hidden"></div>
         <div id="sourcesOut"><p class="small">Waiting for readings.</p></div>
       </div>
 
@@ -180,10 +203,6 @@ svg text.halo{paint-order:stroke;stroke:var(--land);stroke-width:3px;stroke-line
           </div>
         </div>
         <div class="field">
-          <label for="who">Your name (optional, shown with your readings)</label>
-          <input type="text" id="who" maxlength="40" autocomplete="name">
-        </div>
-        <div class="field">
           <label for="when">Date and time of sample</label>
           <input type="datetime-local" id="when">
         </div>
@@ -200,7 +219,6 @@ svg text.halo{paint-order:stroke;stroke:var(--land);stroke-width:3px;stroke-line
       </div>
 
       <div data-pane="readings" class="hidden">
-        <div class="demoSlot"></div>
         <div id="demoBar"></div>
         <ul class="list" id="rlist"></ul>
       </div>
@@ -235,6 +253,8 @@ svg text.halo{paint-order:stroke;stroke:var(--land);stroke-width:3px;stroke-line
         <p>Scores become probabilities with Bayes' rule, P ∝ e<sup>score/2</sup>. The highlighted stretch holds 80% of the probability. If no stretch scores above 9 (roughly a 3-sigma signal) nothing is flagged. After finding the strongest source the tracer removes its effect and looks again, up to three sources.</p>
         <h3>6. Where to test next</h3>
         <p>The best next test site splits the likely stretch in half by probability. Whatever that reading shows, the search area roughly halves, like a binary search.</p>
+        <h3>7. Heat map</h3>
+        <p>The heat map shows how polluted each half-kilometre of river is likely to be, rather than where pollution enters. For each stretch it takes the model's estimate (background plus the effect of every flagged source, carried downstream and diluted), then adds what nearby readings show beyond that estimate, spread about 3 km up and down the same river and fading with distance and age. So a stretch with raised readings shows up even if no single entry point was flagged. Colour runs from background (green) through twice background (amber) to three times or more (red). "Both" uses whichever of nitrate or phosphate is worse relative to its background.</p>
         <h3>Limits</h3>
         <ul>
           <li>River lines and catchment sizes are approximate; flow is estimated, not measured, unless a gauge reading is added.</li>
@@ -247,8 +267,6 @@ svg text.halo{paint-order:stroke;stroke:var(--land);stroke-width:3px;stroke-line
   </aside>
 </main>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 // Tywi Tracer model: river network, hydrology, and source-location inverse model.
 const TywiModel = (() => {
@@ -568,7 +586,7 @@ const M = TywiModel;
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const RNAME = Object.fromEntries(M.RIVERS.map(r => [r.id, r.name]));
-const state = { readings: [], cond: null, res: null, nut: 'n', sel: null, pending: null, asOfUser: null, win: 10,
+const state = { readings: [], cond: null, res: null, nut: 'n', view: 'sources', heatNut: 'both', sel: null, pending: null, asOfUser: null, win: 10,
   db: null, user: null, me: null, canWrite: null, canEdit: false, names: {}, dbReady: false };
 
 /* ---------- map geometry ---------- */
@@ -624,19 +642,105 @@ function zScore(r, bg) {
 }
 const zColor = z => z < 1 ? 'var(--moss)' : z < 3 ? 'var(--peat)' : 'var(--slurry)';
 
+/* ---------- heat map: modelled concentration along every stretch ---------- */
+const HEAT_STEP = 0.5; // km
+const HEAT_KM = 3; // how far along the river a reading's local signal spreads
+function heatSegments() {
+  const res = state.res; if (!res) return [];
+  // what each reading shows beyond the model fit (catches raised water the model didn't flag as a source)
+  const resid = res.readings.map(rd => {
+    const m = M.predict(rd.river, rd.chain, rd.takenAt, res.sources, res.bg, state.cond);
+    return { river: rd.river, chain: rd.chain, w: rd.w,
+      n: isFinite(rd.nitrate) ? rd.nitrate - m.n : null, p: isFinite(rd.phosphate) ? rd.phosphate - m.p : null };
+  });
+  const local = (rid, x, key) => {
+    let num = 0, den = 0;
+    resid.forEach(o => {
+      if (o.river !== rid || o[key] == null) return;
+      const k = o.w * Math.exp(-0.5 * Math.pow((x - o.chain) / HEAT_KM, 2));
+      num += k * o[key]; den += k;
+    });
+    return den > 0 ? (num / den) * Math.min(1, den) : 0; // fades out away from readings
+  };
+  const out = [];
+  M.RIVERS.forEach(r => {
+    for (let a = 0; a < r.length; a += HEAT_STEP) {
+      const b = Math.min(a + HEAT_STEP, r.length), mid = (a + b) / 2;
+      const c = M.predict(r.id, mid, res.asOf, res.sources, res.bg, state.cond);
+      c.n = Math.max(0, c.n + local(r.id, mid, 'n')); c.p = Math.max(0, c.p + local(r.id, mid, 'p'));
+      const rn = c.n / res.bg.n, rp = c.p / res.bg.p;   // times background
+      const ratio = state.heatNut === 'n' ? rn : state.heatNut === 'p' ? rp : Math.max(rn, rp);
+      out.push({ river: r.id, from: a, to: b, n: c.n, p: c.p, ratio });
+    }
+  });
+  return out;
+}
+function heatColor(ratio) { // 1x = moss, 2x = peat, 3x+ = slurry
+  const t = Math.max(0, Math.min(1, (ratio - 1) / 2));
+  return t < 0.5
+    ? `color-mix(in oklab, var(--peat) ${(t * 200).toFixed(0)}%, var(--moss))`
+    : `color-mix(in oklab, var(--slurry) ${((t - 0.5) * 200).toFixed(0)}%, var(--peat))`;
+}
+function drawHeat() {
+  heatSegments().forEach(sg => {
+    const p1 = ll2s(...M.pointAt(sg.river, sg.from)), p2 = ll2s(...M.pointAt(sg.river, sg.to));
+    const w = 7 + Math.sqrt(M.area(sg.river, (sg.from + sg.to) / 2)) * 0.25;
+    const ln = el('line', { x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1], 'stroke-width': w, 'stroke-linecap': 'round', style: `stroke:${heatColor(sg.ratio)}`, opacity: 0.9 }, gHeat);
+    el('title', {}, ln).textContent = `Afon ${RNAME[sg.river]} ${sg.from.toFixed(1)}–${sg.to.toFixed(1)} km · nitrate ≈ ${sg.n.toFixed(1)} mg/L · phosphate ≈ ${sg.p.toFixed(3)} mg/L · ${sg.ratio.toFixed(1)}× background`;
+  });
+}
+// group neighbouring half-km pieces into continuous stretches above 1.5x background, ranked by peak
+function hotStretches() {
+  const segs = heatSegments(), runs = [];
+  let cur = null;
+  segs.forEach(sg => {
+    const hot = sg.ratio >= 1.5;
+    if (hot && cur && cur.river === sg.river && Math.abs(cur.to - sg.from) < 1e-6) { cur.to = sg.to; cur.peak = Math.max(cur.peak, sg.ratio); }
+    else { if (cur) runs.push(cur); cur = hot ? { river: sg.river, from: sg.from, to: sg.to, peak: sg.ratio } : null; }
+  });
+  if (cur) runs.push(cur);
+  return runs.sort((a, b) => b.peak - a.peak).slice(0, 5);
+}
+function renderHot() {
+  const box = $('hotOut');
+  box.classList.toggle('hidden', state.view !== 'heat');
+  if (state.view !== 'heat' || !state.res) return;
+  const label = { both: 'nitrate or phosphate', n: 'nitrate', p: 'phosphate' }[state.heatNut];
+  const runs = hotStretches();
+  box.innerHTML = `<div class="source"><h3>Most polluted stretches</h3>` + (runs.length
+    ? `<p class="small">Estimated ${label} from the model and nearby readings, at least 1.5× background, worst first.</p><ol class="hotlist">` + runs.map(r =>
+        `<li><strong>Afon ${esc(RNAME[r.river])}</strong>, ${r.from.toFixed(1)}–${r.to.toFixed(1)} km from source, ${esc(between(r.river, r.from, r.to))}: up to ${r.peak.toFixed(1)}× background</li>`).join('') + '</ol>'
+    : `<p class="small">No stretch is modelled above 1.5× background for ${label}.</p>`) + `</div>`;
+}
+function setView(v) {
+  state.view = v;
+  document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', b.dataset.view === v));
+  $('heatNut').classList.toggle('hidden', v !== 'heat');
+  $('legendHeat').classList.toggle('hidden', v !== 'heat');
+  $('legendSrc').classList.toggle('hidden', v === 'heat');
+  drawOverlay(); renderHot();
+}
+document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view));
+document.querySelectorAll('[data-hn]').forEach(b => b.onclick = () => {
+  state.heatNut = b.dataset.hn;
+  document.querySelectorAll('[data-hn]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  drawOverlay(); renderHot();
+});
+
 function drawOverlay() {
   gHeat.innerHTML = ''; gMarks.innerHTML = '';
   const res = state.res;
+  if (res && state.view === 'heat') drawHeat();
   if (res) {
     const dens = new Float64Array(M.CANDS.length);
-    res.sources.forEach(s => s.prob.forEach((p, j) => { dens[j] = Math.max(dens[j], Math.min(1, p / 0.06)); }));
+    if (state.view === 'sources') res.sources.forEach(s => s.prob.forEach((p, j) => { dens[j] = Math.max(dens[j], Math.min(1, p / 0.06)); }));
     dens.forEach((v, j) => {
       if (v < 0.04) return;
       const c = M.CANDS[j];
       const p1 = ll2s(...M.pointAt(c.river, c.chain - M.CAND_STEP / 2)), p2 = ll2s(...M.pointAt(c.river, c.chain + M.CAND_STEP / 2));
       el('line', { x1: p1[0], y1: p1[1], x2: p2[0], y2: p2[1], stroke: v > 0.5 ? 'var(--slurry)' : 'var(--peat)', 'stroke-width': 14, 'stroke-linecap': 'round', opacity: (0.15 + 0.75 * v).toFixed(2) }, gHeat);
     });
-    res.sources.forEach(s => {
+    if (state.view === 'sources') res.sources.forEach(s => {
       const [x, y] = ll2s(...s.next.ll);
       el('circle', { cx: x, cy: y, r: 11, fill: 'none', stroke: 'var(--river)', 'stroke-width': 3 }, gMarks);
       el('circle', { cx: x, cy: y, r: 3, fill: 'var(--river)' }, gMarks);
@@ -740,12 +844,12 @@ function doRecompute() {
   const asOf = state.asOfUser ? new Date(state.asOfUser + 'T23:59:59').getTime() : undefined;
   state.res = M.analyze(state.readings, state.cond, { windowDays: state.win, asOf });
   if (!state.asOfUser && state.readings.length) $('asof').value = new Date(state.res.asOf).toISOString().slice(0, 10);
-  drawOverlay(); renderSources(); renderProfile(); renderList(); renderCond(); if (typeof renderDemoToggle === 'function') renderDemoToggle();
+  drawOverlay(); renderHot(); renderSources(); renderProfile(); renderList(); renderCond();
 }
 
 function renderSources() {
   const out = $('sourcesOut'), res = state.res;
-  if (!state.readings.length) { out.innerHTML = '<p class="small">No readings yet. Log the first one from the "Log reading" tab, or tap "Show demo readings" to see how the tracer works.</p>'; return; }
+  if (!state.readings.length) { out.innerHTML = '<p class="small">No readings yet. Log the first one from the "Log a reading" tab.</p>'; return; }
   const n = res.readings.length;
   let h = `<p class="small">${n} reading${n === 1 ? '' : 's'} in the ${res.windowDays} days up to ${fmtDay(res.asOf)}. Background taken as ${res.bg.n.toFixed(1)} mg/L nitrate and ${res.bg.p.toFixed(3)} mg/L phosphate.</p>`;
   if (!res.sources.length) {
@@ -783,9 +887,9 @@ $('win').oninput = e => { state.win = +e.target.value; $('winv').textContent = s
 $('asof').onchange = e => { state.asOfUser = e.target.value || null; recompute(); };
 
 /* ---------- profile chart ---------- */
-document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
+document.querySelectorAll('[data-nut]').forEach(b => b.onclick = () => {
   state.nut = b.dataset.nut;
-  document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  document.querySelectorAll('[data-nut]').forEach(x => x.setAttribute('aria-pressed', x === b));
   renderProfile();
 });
 function renderProfile() {
@@ -865,9 +969,8 @@ $('useLoc').onclick = () => {
 $('save').onclick = async () => {
   const msg = $('saveMsg');
   const say = (t, cls) => { msg.innerHTML = `<div class="msg ${cls || ''}">${esc(t)}</div>`; };
-  if (!state.db) return say('The reading store isn\'t connected. Check your internet connection and reload the page.', 'err');
+  if (!state.db) return say('Readings can only be saved when this page is opened in Claude and you are signed in.', 'err');
   if (state.canWrite === false) return say('You can view readings but not add them. Ask the page owner to give you Contributor access.', 'err');
-  if (state.demoView) return say('You\'re looking at the demo. Go back to real readings to log one.', 'err');
   if (!state.pending) return say('Choose where the sample was taken first.', 'err');
   const nit = $('nit').value === '' ? NaN : parseFloat($('nit').value);
   const pho = $('pho').value === '' ? NaN : parseFloat($('pho').value);
@@ -877,7 +980,6 @@ $('save').onclick = async () => {
   if (isNaN(when)) return say('Enter the date and time of the sample.', 'err');
   if (when.getTime() > Date.now() + 36e5) return say('The sample time is in the future. Check the date.', 'err');
   const doc = { lat: +state.pending.rawLat.toFixed(5), lng: +state.pending.rawLng.toFixed(5), takenAt: when.toISOString(), createdAt: new Date().toISOString(), demo: false, by: state.me || 'unknown' };
-  const who = $('who').value.trim(); if (who) { doc.name = who.slice(0, 40); try { localStorage.setItem('tywi-name', doc.name); } catch (e) {} }
   if (isFinite(nit)) doc.nitrate = nit;
   if (isFinite(pho)) doc.phosphate = pho;
   const note = $('note').value.trim(); if (note) doc.note = note.slice(0, 300);
@@ -888,8 +990,8 @@ $('save').onclick = async () => {
     $('nit').value = ''; $('pho').value = ''; $('note').value = ''; $('when').value = localNow();
     state.pending = null; $('locOut').className = 'msg'; $('locOut').textContent = 'No location yet.';
   } catch (e) {
-    if (e && e.code === 'permission-denied') say('The database refused this reading. Its security rules may have expired: the page owner needs to update them in Firebase.', 'err');
-    else if (e && e.code === 'resource-exhausted') say('The free daily limit has been reached. Try again tomorrow.', 'err');
+    if (e && e.code === 'invalid_argument') { state.canWrite = false; say('You don\'t have permission to add readings. Ask the page owner for Contributor access.', 'err'); }
+    else if (e && e.code === 'quota_exceeded') say('The reading store is full. Remove old demo readings to make space.', 'err');
     else say('The reading didn\'t save. Check your connection and try again.', 'err');
   } finally { $('save').disabled = false; }
 };
@@ -901,8 +1003,8 @@ function selectReading(id) {
 }
 function renderList() {
   const ul = $('rlist'), res = state.res;
-  const demoCount = state.demoView ? 0 : state.readings.filter(r => r.demo).length;
-  $('demoBar').innerHTML = demoCount ? `<div class="msg">${demoCount} old demo readings are saved in the database.  You can still see the demo any time with "Show demo readings", so these can go. <div style="margin-top:6px"><button class="btn ghost" id="clearDemo" type="button">Remove demo readings</button></div></div>` : '';
+  const demoCount = state.readings.filter(r => r.demo).length;
+  $('demoBar').innerHTML = demoCount ? `<div class="msg">${demoCount} demo readings are showing. They're simulated (two hidden pollution sources) so you can see how the tracer works.${state.canEdit ? ' <div style="margin-top:6px"><button class="btn ghost" id="clearDemo" type="button">Remove demo readings</button></div>' : ''}</div>` : '';
   const cd = $('clearDemo');
   if (cd) cd.onclick = async () => {
     if (!confirm('Remove all demo readings? Real readings stay.')) return;
@@ -912,8 +1014,8 @@ function renderList() {
   if (!res || !res.allPrepared.length) { ul.innerHTML = '<li class="small">No readings yet.</li>'; return; }
   const list = [...res.allPrepared].sort((a, b) => b.t - a.t);
   ul.innerHTML = list.map(r => {
-    const who = r.demo ? 'Demo data' : (r.name || 'Someone');
-    const canDel = state.db && !state.demoView && !r.demo && (r.by === state.me || state.canEdit);
+    const who = r.demo ? 'Demo data' : (state.names[r.by] || 'Someone');
+    const canDel = state.db && !r.demo && (r.by === state.me || state.canEdit);
     return `<li data-id="${esc(r.id)}" class="${state.sel === r.id ? 'sel' : ''}">
       <span><span class="chip" style="background:${zColor(zScore(r, res.bg))}"></span><strong>${esc(RNAME[r.river])} ${r.chain.toFixed(1)} km</strong> · ${esc(fmtDate(r.takenAt))}</span>
       <span class="vals">N ${fmtV(r.nitrate, 1)} · P ${fmtV(r.phosphate, 3)}</span>
@@ -956,14 +1058,14 @@ function renderCond() {
     <dt>Rain index (API)</dt><dd>${api.toFixed(1)} mm${missing ? ` · ${missing} day${missing > 1 ? 's' : ''} missing, counted as dry` : ''}</dd>
     <dt>Flow at Nantgaredig</dt><dd>≈ ${(q * M.NANT_AREA).toFixed(0)} m³/s ${(cond.gauge || []).some(g => g.date === new Date(end).toISOString().slice(0, 10)) ? '(gauged)' : '(estimated from rain)'}</dd>
     <dt>Travel time</dt><dd>Llandovery to Carmarthen ≈ ${(Math.pow(q, -0.25) * (M.potential('tywi', 37) - M.potential('tywi', 88)) / 3600).toFixed(0)} hours</dd>
-    <dt>Rain data</dt><dd>${state.rainAuto ? 'Open-Meteo, fetched ' + esc(fmtDate(state.rainFetched)) : 'Couldn\'t reach Open-Meteo; using entered values only'}</dd>`;
+    <dt>Updated</dt><dd>${cond.updatedAt ? esc(fmtDate(cond.updatedAt)) + (cond.source ? ' · ' + esc(cond.source) : '') : 'Never'}</dd>`;
   renderCondEdit();
 }
 let condEditDrawn = false;
 function renderCondEdit() {
   const box = $('condEdit');
   if (!state.canEdit || !state.db) {
-    box.innerHTML = '<p class="small">Rainfall updates automatically from Open-Meteo (which includes Met Office models) every time the page opens. Gauged flows can be added by an editor.</p>';
+    box.innerHTML = '<p class="small">Rain and flow figures are kept up to date by the page editors, from the Met Office and the Natural Resources Wales river gauge at Nantgaredig.</p>';
     condEditDrawn = false; return;
   }
   if (condEditDrawn) return;
@@ -971,18 +1073,18 @@ function renderCondEdit() {
   const today = new Date().toISOString().slice(0, 10);
   box.innerHTML = `
     <h2 style="margin-top:14px">Update rain and flow</h2>
-    <p class="small">Rainfall fills in automatically. Anything you enter here overrides it for that day. Add the mean flow at the Nantgaredig gauge (Natural Resources Wales river levels) when you have it.</p>
+    <p class="small">Enter the day's total rainfall for the Tywi valley (Met Office) and, if you have it, the mean flow at the Nantgaredig gauge (Natural Resources Wales river levels).</p>
     <div class="row2 field"><div><label for="cDate">Date</label><input type="date" id="cDate" value="${today}"></div>
     <div><label for="cRain">Rainfall (mm)</label><input type="number" id="cRain" step="0.1" min="0"></div></div>
     <div class="field"><label for="cFlow">Gauged flow at Nantgaredig (m³/s, optional)</label><input type="number" id="cFlow" step="0.1" min="0"></div>
-    <div class="row2 field"><div><label for="cBgN">Background nitrate (blank = auto)</label><input type="number" id="cBgN" step="0.1" min="0" value="${state.condDb && state.condDb.background && state.condDb.background.nitrate || ''}"></div>
-    <div><label for="cBgP">Background phosphate (blank = auto)</label><input type="number" id="cBgP" step="0.001" min="0" value="${state.condDb && state.condDb.background && state.condDb.background.phosphate || ''}"></div></div>
+    <div class="row2 field"><div><label for="cBgN">Background nitrate (blank = auto)</label><input type="number" id="cBgN" step="0.1" min="0" value="${state.cond && state.cond.background && state.cond.background.nitrate || ''}"></div>
+    <div><label for="cBgP">Background phosphate (blank = auto)</label><input type="number" id="cBgP" step="0.001" min="0" value="${state.cond && state.cond.background && state.cond.background.phosphate || ''}"></div></div>
     <button class="btn" id="cSave" type="button">Save rain and flow</button><div id="cMsg"></div>`;
   $('cSave').onclick = async () => {
     const say = (t, cls) => $('cMsg').innerHTML = `<div class="msg ${cls}">${esc(t)}</div>`;
     const date = $('cDate').value, rain = $('cRain').value, flow = $('cFlow').value;
     if (!date) return say('Choose a date.', 'err');
-    const cur = state.condDb ? JSON.parse(JSON.stringify(state.condDb)) : {};
+    const cur = state.cond ? JSON.parse(JSON.stringify(state.cond)) : {};
     cur.days = (cur.days || []).filter(d => d.date !== date || rain === '');
     if (rain !== '') cur.days.push({ date, rain_mm: +rain });
     cur.days.sort((a, b) => a.date < b.date ? -1 : 1);
@@ -993,75 +1095,41 @@ function renderCondEdit() {
     cur.background = { nitrate: $('cBgN').value === '' ? null : +$('cBgN').value, phosphate: $('cBgP').value === '' ? null : +$('cBgP').value };
     cur.updatedAt = new Date().toISOString(); cur.source = 'Entered by an editor';
     try { await state.db.doc('conditions/current').set(cur); say('Saved. Flows and the analysis have been updated.', 'ok'); $('cRain').value = ''; $('cFlow').value = ''; }
-    catch (e) { say('That didn\'t save. Check your connection and try again.', 'err'); }
+    catch (e) { say(e && e.code === 'invalid_argument' ? 'Only page editors can change rain and flow.' : 'That didn\'t save. Try again.', 'err'); }
   };
 }
 
 /* ---------- data connection ---------- */
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDExYXUQoOVscdznpao2EeGwwzWR28jgfI",
-  authDomain: "tywi-tracer.firebaseapp.com",
-  projectId: "tywi-tracer",
-  storageBucket: "tywi-tracer.firebasestorage.app",
-  messagingSenderId: "74331176754",
-  appId: "1:74331176754:web:7949783ae2d3307662212b"
-};
-const DEMO = [{"lat": 51.90765, "lng": -3.81078, "takenAt": "2026-09-28T10:43:00Z", "nitrate": 2.7, "demo": true, "by": "demo", "phosphate": 0.046}, {"lat": 51.9196, "lng": -4.12, "takenAt": "2026-09-28T14:28:00Z", "nitrate": 3, "demo": true, "by": "demo", "phosphate": 0.012}, {"lat": 51.86169, "lng": -4.14748, "takenAt": "2026-09-28T11:09:00Z", "nitrate": 5.1, "demo": true, "by": "demo", "phosphate": 0.291}, {"lat": 51.92484, "lng": -3.91944, "takenAt": "2026-09-29T08:21:00Z", "nitrate": 2.3, "demo": true, "by": "demo", "phosphate": 0.021}, {"lat": 52.0679, "lng": -3.92498, "takenAt": "2026-09-29T17:27:00Z", "nitrate": 2.8, "demo": true, "by": "demo", "phosphate": 0.028}, {"lat": 51.86732, "lng": -4.0651, "takenAt": "2026-09-29T11:47:00Z", "nitrate": 5.4, "demo": true, "by": "demo"}, {"lat": 51.86181, "lng": -4.23055, "takenAt": "2026-09-29T09:55:00Z", "nitrate": 4.1, "demo": true, "by": "demo", "phosphate": 0.14}, {"lat": 51.89553, "lng": -4.14533, "takenAt": "2026-09-30T14:14:00Z", "nitrate": 2.3, "demo": true, "by": "demo"}, {"lat": 51.90463, "lng": -3.8005, "takenAt": "2026-09-30T17:33:00Z", "nitrate": 3.3, "demo": true, "by": "demo"}, {"lat": 51.96069, "lng": -3.85211, "takenAt": "2026-09-30T09:41:00Z", "nitrate": 3.2, "demo": true, "by": "demo", "phosphate": 0.032}, {"lat": 51.89649, "lng": -3.96682, "takenAt": "2026-10-01T16:33:00Z", "nitrate": 2.9, "demo": true, "by": "demo", "phosphate": 0.067}, {"lat": 51.93359, "lng": -3.86996, "takenAt": "2026-10-01T09:38:00Z", "nitrate": 2.4, "demo": true, "by": "demo", "phosphate": 0.014}, {"lat": 52.03897, "lng": -3.96779, "takenAt": "2026-10-01T15:21:00Z", "nitrate": 3.1, "demo": true, "by": "demo"}, {"lat": 52.0065, "lng": -3.77907, "takenAt": "2026-10-01T17:54:00Z", "nitrate": 3.2, "demo": true, "by": "demo"}, {"lat": 52.10998, "lng": -3.76011, "takenAt": "2026-10-02T17:11:00Z", "nitrate": 3.6, "demo": true, "by": "demo", "phosphate": 0.031}, {"lat": 51.92892, "lng": -3.91293, "takenAt": "2026-10-02T17:09:00Z", "nitrate": 3.1, "demo": true, "by": "demo", "phosphate": 0.039}, {"lat": 51.95387, "lng": -4.30074, "takenAt": "2026-10-02T12:18:00Z", "nitrate": 4.4, "demo": true, "by": "demo", "phosphate": 0.05}, {"lat": 51.95815, "lng": -4.08015, "takenAt": "2026-10-03T11:24:00Z", "nitrate": 2.5, "demo": true, "by": "demo", "phosphate": 0.048}, {"lat": 51.85206, "lng": -4.30652, "takenAt": "2026-10-03T17:21:00Z", "nitrate": 3.4, "demo": true, "by": "demo"}, {"lat": 51.9289, "lng": -3.86039, "takenAt": "2026-10-03T14:42:00Z", "nitrate": 2.7, "demo": true, "by": "demo", "phosphate": 0.024}, {"lat": 51.87835, "lng": -4.00486, "takenAt": "2026-10-03T16:20:00Z", "nitrate": 3.8, "demo": true, "by": "demo", "phosphate": 0.048}, {"lat": 51.94877, "lng": -3.87686, "takenAt": "2026-10-03T17:41:00Z", "nitrate": 3.1, "demo": true, "by": "demo", "phosphate": 0.056}, {"lat": 52.02845, "lng": -3.97813, "takenAt": "2026-10-03T15:42:00Z", "nitrate": 2.9, "demo": true, "by": "demo", "phosphate": 0.056}, {"lat": 51.879, "lng": -4.00491, "takenAt": "2026-10-04T08:41:00Z", "nitrate": 4.4, "demo": true, "by": "demo", "phosphate": 0.108}, {"lat": 51.87477, "lng": -4.17045, "takenAt": "2026-10-04T16:11:00Z", "nitrate": 4.8, "demo": true, "by": "demo", "phosphate": 0.147}, {"lat": 51.95476, "lng": -3.8649, "takenAt": "2026-10-04T12:33:00Z", "nitrate": 3.6, "demo": true, "by": "demo", "phosphate": 0.018}, {"lat": 51.85707, "lng": -4.29763, "takenAt": "2026-10-04T11:36:00Z", "nitrate": 3.7, "demo": true, "by": "demo", "phosphate": 0.112}, {"lat": 52.05109, "lng": -3.94911, "takenAt": "2026-10-04T12:07:00Z", "nitrate": 3.1, "demo": true, "by": "demo", "phosphate": 0.063}, {"lat": 52.0837, "lng": -3.76937, "takenAt": "2026-10-04T11:24:00Z", "nitrate": 2.6, "demo": true, "by": "demo", "phosphate": 0.086}, {"lat": 51.93031, "lng": -3.85991, "takenAt": "2026-10-05T11:27:00Z", "nitrate": 2.7, "demo": true, "by": "demo", "phosphate": 0.046}, {"lat": 51.97218, "lng": -4.06597, "takenAt": "2026-10-05T15:19:00Z", "nitrate": 2.8, "demo": true, "by": "demo"}, {"lat": 52.11426, "lng": -3.75874, "takenAt": "2026-10-05T16:37:00Z", "nitrate": 2.7, "demo": true, "by": "demo", "phosphate": 0.02}, {"lat": 51.88408, "lng": -3.98849, "takenAt": "2026-10-06T15:17:00Z", "nitrate": 3.2, "demo": true, "by": "demo"}, {"lat": 51.952, "lng": -3.87187, "takenAt": "2026-10-06T11:38:00Z", "nitrate": 3.3, "demo": true, "by": "demo"}, {"lat": 51.96681, "lng": -4.07118, "takenAt": "2026-10-06T12:05:00Z", "nitrate": 2.4, "demo": true, "by": "demo", "phosphate": 0.026}, {"lat": 51.85401, "lng": -4.30577, "takenAt": "2026-10-06T14:07:00Z", "nitrate": 3.6, "demo": true, "by": "demo", "phosphate": 0.085}, {"lat": 51.8929, "lng": -4.15048, "takenAt": "2026-10-07T10:32:00Z", "nitrate": 6.1, "demo": true, "by": "demo", "phosphate": 0.235}, {"lat": 51.95053, "lng": -4.08682, "takenAt": "2026-10-07T08:42:00Z", "nitrate": 2.6, "demo": true, "by": "demo", "phosphate": 0.019}, {"lat": 51.93271, "lng": -4.29979, "takenAt": "2026-10-07T15:56:00Z", "nitrate": 2.4, "demo": true, "by": "demo"}, {"lat": 51.88744, "lng": -3.98135, "takenAt": "2026-10-07T12:19:00Z", "nitrate": 3.8, "demo": true, "by": "demo", "phosphate": 0.089}, {"lat": 51.8556, "lng": -4.30467, "takenAt": "2026-10-07T17:38:00Z", "nitrate": 4.1, "demo": true, "by": "demo", "phosphate": 0.093}, {"lat": 51.97296, "lng": -3.83289, "takenAt": "2026-10-07T11:37:00Z", "nitrate": 3.4, "demo": true, "by": "demo", "phosphate": 0.06}];
 function setStatus(t) { $('status').textContent = t; }
-function mergeCond() {
-  const db = state.condDb || {};
-  const days = {};
-  (state.rainAuto || []).forEach(d => days[d.date] = d.rain_mm);
-  (db.days || []).forEach(d => days[d.date] = d.rain_mm);
-  state.cond = { days: Object.entries(days).map(([date, rain_mm]) => ({ date, rain_mm })), gauge: db.gauge || [], background: db.background || {} };
-}
-function setDemoView(on) {
-  state.demoView = on;
-  state.readings = on ? DEMO.map((r, i) => ({ ...r, id: 'demo-view-' + i })) : (state.dbReadings || []);
-  state.asOfUser = null; $('asof').value = '';
-  setStatus(on ? 'Demo view: nothing here is saved' : `${state.readings.length} readings · live`);
-  doRecompute();
-}
-function renderDemoToggle() {
-  document.querySelectorAll('.demoSlot').forEach(slot => {
-    slot.innerHTML = state.demoView
-      ? '<div class="msg"><strong>You\'re viewing demo readings.</strong> They\'re simulated, with two hidden pollution sources, and aren\'t saved anywhere. Real readings are untouched.<div style="margin-top:6px"><button class="btn" data-demo="off" type="button">Back to real readings</button></div></div>'
-      : '<div style="margin-bottom:12px"><button class="btn ghost" data-demo="on" type="button">Show demo readings</button></div>';
-    slot.querySelectorAll('[data-demo]').forEach(b => b.onclick = () => setDemoView(b.dataset.demo === 'on'));
-  });
-}
-async function fetchRain() {
-  try {
-    const u = 'https://api.open-meteo.com/v1/forecast?latitude=51.95&longitude=-3.95&daily=precipitation_sum&past_days=92&forecast_days=1&timezone=Europe%2FLondon';
-    const r = await fetch(u); if (!r.ok) throw 0;
-    const j = await r.json();
-    state.rainAuto = j.daily.time.map((t, i) => ({ date: t, rain_mm: j.daily.precipitation_sum[i] })).filter(d => d.rain_mm != null);
-    state.rainFetched = Date.now();
-  } catch (e) { state.rainAuto = null; }
-  mergeCond(); recompute();
-}
-try { state.me = localStorage.getItem('tywi-id'); if (!state.me) { state.me = 'dev-' + Math.random().toString(36).slice(2, 12); localStorage.setItem('tywi-id', state.me); } $('who').value = localStorage.getItem('tywi-name') || ''; } catch (e) { state.me = 'dev-' + Math.random().toString(36).slice(2, 12); }
-state.canEdit = /editor/.test(location.hash);
-state.canWrite = true;
-mergeCond();
 doRecompute();
-fetchRain();
-try {
-  firebase.initializeApp(FIREBASE_CONFIG);
-  state.db = firebase.firestore();
-} catch (e) { state.db = null; }
-if (!state.db) {
-  setStatus('Not connected to the reading store');
-  $('logIntro').textContent = 'The reading store couldn\'t load. Check your connection and reload.';
-} else {
-  state.db.collection('readings').onSnapshot(snap => {
-    state.dbReadings = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => isFinite(r.lat) && isFinite(r.lng) && r.takenAt);
-    if (state.demoView) return;
-    state.readings = state.dbReadings;
+(async () => {
+  let db = null, user = null;
+  try { [db, user] = await Promise.all([claude.use('db'), claude.use('user')]); } catch (e) {}
+  state.user = user;
+  if (user) {
+    try { state.me = await user.id(); } catch (e) {}
+    try { state.canEdit = await user.canEdit(); } catch (e) {}
+    try { state.canWrite = await user.can('data.write'); } catch (e) {}
+  }
+  if (!db) {
+    setStatus('Offline view: open in Claude to see shared readings');
+    $('logIntro').textContent = 'Saving readings needs this page to be opened in Claude while signed in.';
+    return;
+  }
+  state.db = db;
+  if (state.canWrite === false) $('logIntro').textContent = 'You can view the analysis. To add readings, ask the page owner for Contributor access.';
+  db.collection('readings').onSnapshot(snap => {
+    state.readings = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => isFinite(r.lat) && isFinite(r.lng) && r.takenAt);
     setStatus(`${state.readings.length} readings · live`);
-    recompute();
-  }, e => setStatus(e && e.code === 'permission-denied' ? 'Database rules are blocking reads. Update the rules in Firebase.' : 'Readings stopped updating. Reload the page.'));
-  state.db.doc('conditions/current').onSnapshot(s => { state.condDb = s.exists ? s.data() : null; condEditDrawn = false; mergeCond(); recompute(); }, () => {});
+    resolveNames(); recompute();
+  }, () => setStatus('Readings stopped updating. Reload the page.'));
+  db.doc('conditions/current').onSnapshot(s => { state.cond = s.exists ? s.data() : null; condEditDrawn = false; recompute(); }, () => {});
+})();
+async function resolveNames() {
+  if (!state.user) return;
+  const ids = [...new Set(state.readings.filter(r => !r.demo && r.by).map(r => r.by))];
+  if (!ids.length) return;
+  try { const ps = await state.user.profiles(ids); ids.forEach(id => state.names[id] = (ps[id] && ps[id].name) || 'Someone'); renderList(); } catch (e) {}
 }
 })();
 </script>
